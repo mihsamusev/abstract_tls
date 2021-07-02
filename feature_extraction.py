@@ -93,32 +93,42 @@ def add_typed_phase_count(state, tls_id, phase_id, target, user_type="DEFAULT_VE
     return state
 
 
-class ExtractionPipeline:
+class TLSDataPipeline:
     """
     Populates state with data about tls and lanes depending on
     the config requirements
     """
-    def __init__(self, tls_ext, user_ext, state_template, tls_program_id=1):
+    def __init__(self, tls_id, tls_program_id, state_template, query):
         self.tls_program_id = tls_program_id
-        self.tls_ext = tls_ext
-        self.tls_id = self.tls_ext.get("id")
-        self.user_ext = user_ext
+        self.tls_id = tls_id
+        self.query = query
         self.state_template = copy.deepcopy(state_template)
         self.state = {}
+
+        self.detectors = None
+        self.controlled_lanes = traci.trafficlight.getControlledLanes(self.tls_id)
+        self.walking_edges = [e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_w")]
+        self.crossing_edges = [e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_c")]
+        self.n_ped_signals = len(self.crossing_edges)
+
         self.validate_targets()
+
+    def reset_state(self):
+        self.state = copy.deepcopy(self.state_template)
+
 
     def validate_targets(self):
         """
-        Check whether UPPAAL variables area available for writting 
+        Check whether state template variables area available for writting 
         extracted simulation data
         """
         lane_ids = traci.lane.getIDList()
         phase_count = len(traci.trafficlight.getAllProgramLogics(
             self.tls_id)[self.tls_program_id].getPhases())
 
-        for ext in self.user_ext:
-            origin = ext["from"]
-            for sumo_var, stratego_var in ext["mapping"].items():
+        for q in self.query:
+            origin = q["from"]
+            for sumo_var, target_var in q["mapping"].items():
                 # validate origin
                 if origin == "lane":
                     assert sumo_var in lane_ids, \
@@ -129,63 +139,43 @@ class ExtractionPipeline:
                     assert int(sumo_var) < phase_count, \
                         f"{sumo_var} is not a TLS phases"
 
-                # validate stratego_var
-                if isinstance(stratego_var, list):
-                    assert stratego_var[0] in self.state_template.keys(), \
-                    f"{stratego_var[0]} is not in UPPAAL variables"
-                    assert stratego_var[1] <= len(self.state_template[stratego_var[0]]), \
-                        f"{stratego_var[0]} at {stratego_var[1]} is out of bounds of UPPAAL variable"
+                # validate target_var
+                if isinstance(target_var, list):
+                    assert target_var[0] in self.state_template.keys(), \
+                    f"{target_var[0]} is not in target variables"
+                    assert target_var[1] <= len(self.state_template[target_var[0]]), \
+                        f"{target_var[0]} at {target_var[1]} is out of bounds of target variable"
                 else:
-                    assert stratego_var in self.state_template.keys(), \
-                    f"{stratego_var} is not in UPPAAL variables"
+                    assert target_var in self.state_template.keys(), \
+                    f"{target_var} is not in target variables"
 
-                
-    def reset_state(self):
-        self.state = copy.deepcopy(self.state_template)
+    def extract(self):
+        self.reset_state()
+        for q in self.query:
+            if q["feature"] == "tls_state":
+                raise NotImplementedError
+            elif q["feature"] == "count":
+                self.extract_counts(q["from"], q["user_type"], q["mapping"])
+            elif q["feature"] == "speed":
+                raise NotImplementedError
+            elif q["feature"] == "eta":
+                raise NotImplementedError
+            elif q["feature"] == "waiting_time":
+                raise NotImplementedError
 
-    def extract_tls(self):
-        if "phase_var" in self.tls_ext:            
-            self.state = add_phase(self.state, 
-                target=self.tls_ext["phase_var"],
-                tls_id=self.tls_id,
-                phase_map=self.tls_ext.phase_map)
+        return self.state
 
-        if self.tls_ext.get("duration_var") is not None:
-            self.state = add_duration(self.state,
-                target=self.tls_ext["duration_var"],
-                tls_id=self.tls_id)
-    
-    def extract_counts(self, origin, mapping, user_type="DEFAULT_VEHTYPE"):
+    def extract_counts(self, origin, user_type, mapping):
         """
         Extracts and adds queue length of given vtype
         """
         if origin == "lane": 
-            for lane, stratego_var in mapping.items():
-                add_typed_lane_count(self.state, lane, stratego_var, user_type)
+            for lane, target_var in mapping.items():
+                add_typed_lane_count(self.state, lane, target_var, user_type)
         elif origin == "detector":
-            #for detector, stratego_var in mapping.items():
+            #for detector, target_var in mapping.items():
             NotImplementedError
         elif origin == "phase":
-            for phase, stratego_var in mapping.items():
+            for phase, target_var in mapping.items():
                 add_typed_phase_count(
-                    self.state, self.tls_id, phase, stratego_var, user_type)
-
-    def extract(self):
-        self.reset_state()
-        self.extract_tls()
-
-        for ext in self.user_ext:
-            if ext["feature"] == "count":
-                self.extract_counts(
-                    origin=ext["from"],
-                    mapping=ext["mapping"],
-                    user_type=ext["user_type"])
-
-        return self.state
-
-
-
-
-
-
-
+                    self.state, self.tls_id, phase, target_var, user_type)

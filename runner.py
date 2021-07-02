@@ -5,7 +5,7 @@ import traci
 from tlsagent import CrosswalkTLS, RecordedTLS, TimedTLS
 from resultlogger import get_logger
 from split_log import get_tls_dicts
-from feature_extraction import ExtractionPipeline
+
 
 def run(tls_list=[], logger=None):
 
@@ -33,7 +33,8 @@ if __name__ == "__main__":
     # get precomputed logs
     precomputed_tls = get_tls_dicts("log/test_20210628141410.log")
 
-    cwlk_cfg = {
+    cfg = {
+        "id": "B1",
         "constants": {"MIN_TIME": 15},
         "variables": {"ped_count": 0},
         "extract": [
@@ -43,20 +44,14 @@ if __name__ == "__main__":
             "mapping": {2: "ped_count" }
             }]
         }
-    fe_B1 = ExtractionPipeline(
-        {"id": "B1"},
-        cwlk_cfg["extract"],
-        cwlk_cfg["variables"],
-        tls_program_id=0)
-    
+
     # this is build with a bulder design pattern from config
     tls_list = [
         TimedTLS('A1'),
-        CrosswalkTLS('B1', cwlk_cfg["constants"], cwlk_cfg["variables"], fe_B1),
-        TimedTLS('C1'),
+        CrosswalkTLS(cfg['id'], cfg["constants"], cfg["variables"], cfg["extract"]),
+        RecordedTLS('C1', constants={"sequence": precomputed_tls["C1"]}),
     ]
 
-    print([t.phase for t in tls_list])
     #tls_logger = get_logger("test", directory="/home/msa/Documents/SUMO/abstract_tls/log", is_timestamped=True)
     tls_logger = None
     run(tls_list, tls_logger)
