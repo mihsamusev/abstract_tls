@@ -1,6 +1,33 @@
 import copy
+from typing import Callable
 import traci
 from feature_extraction import TLSDataPipeline
+
+
+class TLSFactory():
+	"""
+	Factory class for creating TLS controllers
+	"""
+	registry = {}
+
+	@classmethod
+	def create_controller(cls, name: str, **kwargs) -> 'TLSAgent':
+		"""
+		Factory command to create a controller
+		"""
+		controller_class = cls.registry.get(name)
+		controller = controller_class(**kwargs)
+		return controller
+
+	@classmethod
+	def register(cls, name: str) -> Callable:
+	    def inner_wrapper(wrapped_class: TLSAgent) -> Callable:
+            if name in cls.registry:
+                logger.warning('Executor %s already exists. Will replace it', name)
+            cls.registry[name] = wrapped_class
+            return wrapped_class
+        return inner_wrapper
+
 
 class TLSAgent:
 	"""
@@ -151,3 +178,31 @@ class CrosswalkTLS(TimedTLS):
 		else:
 			next_phase = super().calculate_next_phase()
 		return next_phase
+
+
+class StrategoTLS(TimedTLS):
+	"""
+	Controller class for a pedestrian responsive crosswalk controller
+	"""
+	def __init__(self, tls_id, constants=None, variables=None, data_query=None, optimizer=None):
+		super().__init__(tls_id, constants, variables, data_query, optimizer)
+
+		self.mpc_step = self.constants.get('mpc_step')
+		self.min_green = self.constants.get('min_green')
+		self.uppaal_query = self.constants.get('query')
+		self.uppaal_verifyta = self.constants.get('verifyta')
+		self.uppaal_debug = self.constants.get('debug')
+
+	def calculate_next_phase(self):
+		next_phase = self.phase
+
+		# read state
+		self.variables = self.data_pipeline.extract()
+
+		self.optimizer.init_simfile()
+		self.optimizer.update_state(self.variables)
+		self.optimizer.insert_state()
+
+		durations, phase_seq  = self.optimizer.run(
+			queryfile=self.uppaal_query,
+			verifyta_path=self.uppaal_verifyta)

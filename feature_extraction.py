@@ -116,7 +116,6 @@ class TLSDataPipeline:
     def reset_state(self):
         self.state = copy.deepcopy(self.state_template)
 
-
     def validate_targets(self):
         """
         Check whether state template variables area available for writting 
