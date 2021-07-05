@@ -1,10 +1,11 @@
+import warnings
 import copy
 from typing import Callable
 import traci
 from feature_extraction import TLSDataPipeline
 
 
-class TLSFactory():
+class TLSFactory:
 	"""
 	Factory class for creating TLS controllers
 	"""
@@ -21,13 +22,20 @@ class TLSFactory():
 
 	@classmethod
 	def register(cls, name: str) -> Callable:
-	    def inner_wrapper(wrapped_class: TLSAgent) -> Callable:
-            if name in cls.registry:
-                logger.warning('Executor %s already exists. Will replace it', name)
-            cls.registry[name] = wrapped_class
-            return wrapped_class
-        return inner_wrapper
+		def inner_wrapper(wrapped_class: 'TLSAgent') -> Callable:
+			if name in cls.registry:
+				warnings.warn(f'TLS controller {name} already exists. Will replace it')
+			cls.registry[name] = wrapped_class
+			return wrapped_class		
+		return inner_wrapper
 
+
+	@classmethod
+	def get_registered_names(cls):
+		"""
+		returns registered names
+		"""
+		return list(cls.registry.keys())
 
 class TLSAgent:
 	"""
@@ -72,7 +80,8 @@ class TLSAgent:
 
 	def calculate_next_phase(self):
 		"""
-		Here goes update logic using constants, variables, feature_extractor and optimizer
+		Here goes update logic using constants, 
+		variables, data query and optimizer
 		"""
 		raise NotImplementedError
 
@@ -106,6 +115,7 @@ class TLSAgent:
 		return self.variables.copy()
 
 
+@TLSFactory.register('base_timed')
 class TimedTLS(TLSAgent):
 	"""
 	Controller class model wrapping a standart
@@ -122,6 +132,7 @@ class TimedTLS(TLSAgent):
 		return next_phase
 
 
+@TLSFactory.register('base_recorded')
 class RecordedTLS(TLSAgent):
 	"""
 	Controller class to replicated recorded sequence
@@ -144,6 +155,7 @@ class RecordedTLS(TLSAgent):
 		return next_phase
 
 
+@TLSFactory.register('base_crosswalk')
 class CrosswalkTLS(TimedTLS):
 	"""
 	Controller class for a pedestrian responsive crosswalk controller
@@ -180,29 +192,3 @@ class CrosswalkTLS(TimedTLS):
 		return next_phase
 
 
-class StrategoTLS(TimedTLS):
-	"""
-	Controller class for a pedestrian responsive crosswalk controller
-	"""
-	def __init__(self, tls_id, constants=None, variables=None, data_query=None, optimizer=None):
-		super().__init__(tls_id, constants, variables, data_query, optimizer)
-
-		self.mpc_step = self.constants.get('mpc_step')
-		self.min_green = self.constants.get('min_green')
-		self.uppaal_query = self.constants.get('query')
-		self.uppaal_verifyta = self.constants.get('verifyta')
-		self.uppaal_debug = self.constants.get('debug')
-
-	def calculate_next_phase(self):
-		next_phase = self.phase
-
-		# read state
-		self.variables = self.data_pipeline.extract()
-
-		self.optimizer.init_simfile()
-		self.optimizer.update_state(self.variables)
-		self.optimizer.insert_state()
-
-		durations, phase_seq  = self.optimizer.run(
-			queryfile=self.uppaal_query,
-			verifyta_path=self.uppaal_verifyta)

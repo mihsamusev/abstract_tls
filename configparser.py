@@ -3,6 +3,10 @@ import pathlib
 import os
 import shutil
 import confuse
+import json
+
+from tlsagents.base import TLSFactory
+
 
 class FilenameValidate(confuse.Filename):
     """
@@ -46,8 +50,8 @@ def get_valid_config():
         "job": {
             "name": str,
             "dir": confuse.Optional(
-                FilenameValidate(cwd=pathlib.Path(__file__).parent.absolute()),
-                default=pathlib.Path(__file__).parent.absolute()
+                FilenameValidate(cwd=str(pathlib.Path(__file__).parent.absolute())),
+                default=str(pathlib.Path(__file__).parent.absolute())
             ),
             "max_steps": 10e5,
             "logging": bool     
@@ -63,8 +67,9 @@ def get_valid_config():
 
     tls_template = confuse.Sequence({
             "id": str,
-            "constants": str,
-            'variables': confuse.MappingValues(
+            "controller": confuse.Choice(TLSFactory.get_registered_names()),
+            "constants": dict,
+            "variables": confuse.MappingValues(
             confuse.OneOf([
                 confuse.Number(),
                 confuse.TypeTemplate(list)
@@ -79,32 +84,14 @@ def get_valid_config():
         })
 
     full_template = {
-        "uppaal": uppaal_template,
         "sumo": sumo_template,
         "tls": tls_template,
     }
     full_template.update(job_template)
     valid_config = config.get(full_template)
 
-    # add debug and output folders if they are required
-    if valid_config.uppaal.debug:
-        debug_dir = os.path.join(valid_config.job.dir, "debug")
-        os.makedirs(debug_dir, exist_ok=True)
-        debug_model = os.path.join(
-            debug_dir, 
-            f"{valid_config.job.name}_{os.path.basename(valid_config.uppaal.model)}"
-            )
-        valid_config.uppaal.update({
-            "debug_dir": debug_dir,
-            "debug_model": debug_model
-            })
-
-    if valid_config.logging:
-        output_dir = os.path.join(valid_config.job.dir, "output")
-        os.makedirs(output_dir, exist_ok=True)
-        valid_config.logging.update({"dir": output_dir})
-
     return valid_config
 
 if __name__ == "__main__":
-    pass
+    cfg = get_valid_config()
+    print(json.dumps(cfg, indent=4))
