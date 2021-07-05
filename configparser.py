@@ -50,8 +50,9 @@ def get_valid_config():
         "job": {
             "name": str,
             "dir": confuse.Optional(
-                FilenameValidate(cwd=str(pathlib.Path(__file__).parent.absolute())),
-                default=str(pathlib.Path(__file__).parent.absolute())
+                FilenameValidate(
+                    cwd=str(pathlib.Path(__file__).parent.absolute())),
+                    default=str(pathlib.Path(__file__).parent.absolute())
             ),
             "max_steps": 10e5,
             "logging": bool     
@@ -60,25 +61,35 @@ def get_valid_config():
     job_config = config.get(job_template)
 
     sumo_template = {
-        "dir": FilenameValidate(cwd=job_config.job.dir),
+        "dir": FilenameValidate(
+            cwd=job_config.job.dir),
         "sumocfg": FilenameValidate(relative_to="dir"),
         "gui": True,
     }
 
     tls_template = confuse.Sequence({
             "id": str,
-            "controller": confuse.Choice(TLSFactory.get_registered_names()),
-            "constants": dict,
+            "controller": confuse.Choice(
+                TLSFactory.get_registered_names()),
+            "constants": confuse.MappingValues(
+                confuse.OneOf([
+                    confuse.Number(),
+                    confuse.TypeTemplate(list),
+                    FilenameValidate(cwd=job_config.job.dir)
+                ])
+            ),
             "variables": confuse.MappingValues(
-            confuse.OneOf([
-                confuse.Number(),
-                confuse.TypeTemplate(list)
+                confuse.OneOf([
+                    confuse.Number(),
+                    confuse.TypeTemplate(list)
                 ])
             ),
             "extract": confuse.Sequence({
-                "user_type": str, # NB! is not really validated
-                "feature": confuse.Choice(["count", "speed", "eta", "delay", "waiting_time"]),
-                "from": confuse.Choice(["lane", "detector", "phase"]),
+                "user_type": str, # NB! is not really validated before FE
+                "feature": confuse.Choice(
+                    ["count", "speed", "eta", "delay", "waiting_time"]),
+                "from": confuse.Choice(
+                    ["lane", "detector", "phase"]),
                 "mapping": dict
             })
         })

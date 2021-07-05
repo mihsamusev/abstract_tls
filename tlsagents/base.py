@@ -26,7 +26,7 @@ class TLSFactory:
 			if name in cls.registry:
 				warnings.warn(f'TLS controller {name} already exists. Will replace it')
 			cls.registry[name] = wrapped_class
-			return wrapped_class		
+			return wrapped_class
 		return inner_wrapper
 
 

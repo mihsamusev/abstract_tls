@@ -7,10 +7,10 @@ job:
 sumo:
   dir: "sumo"
   gui: True
-  sumocfg: "run.sumocfg"
+  sumocfg: run.sumocfg
 
 tls:
-  - id: "B1"
+  - id: B1
     controller: base_crosswalk
     constants:
       MIN_TIME: 15
@@ -21,12 +21,10 @@ tls:
         user_type: pedestrian
         from: phase
         mapping:
-          2: "ped_count"
+          2: ped_count
 
-  - id: "B2"
+  - id: B2
     controller: base_crosswalk
-    constants:
-      MIN_TIME: 10
     variables:
       ped_count: 0
     extract:
@@ -34,4 +32,22 @@ tls:
         user_type: pedestrian
         from: phase
         mapping:
-          2: "ped_count"
+          2: ped_count
+
+  - id: A1
+    controller: base_timed
+    constants: 
+      network_path: sumo/block.net.xml
+
+  - id: C1
+    controller: stratego
+    constants:
+      horizon:
+      mpc_step:
+      min_green:
+      model_template:
+      verifyta_query:
+      verifyta_command:
+      debug:
+    variables:
+    extract:
