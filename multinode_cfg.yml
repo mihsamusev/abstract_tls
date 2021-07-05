@@ -26,7 +26,7 @@ tls:
 
   - id: "C1"
     controller:
-      module: CrosswalkTLS
+      module: custom
     constants:
       MIN_TIME: 15
     state_variables:
