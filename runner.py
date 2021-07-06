@@ -53,7 +53,7 @@ if __name__ == "__main__":
             "variables": tls_cfg.variables,
             "data_query": tls_cfg.extract
         }
-        tls = TLSFactory.create_controller(tls_type, **kwargs)
+        tls = TLSFactory.create_agent(tls_type, **kwargs)
         tls_list.append(tls)
 
     #tls_logger = get_logger("test", directory="/home/msa/Documents/SUMO/abstract_tls/log", is_timestamped=True)

@@ -12,7 +12,7 @@ class TLSFactory:
 	registry = {}
 
 	@classmethod
-	def create_controller(cls, name: str, **kwargs) -> 'TLSAgent':
+	def create_agent(cls, name: str, **kwargs) -> 'TLSAgent':
 		"""
 		Factory command to create a controller
 		"""
@@ -21,7 +21,7 @@ class TLSFactory:
 		return controller
 
 	@classmethod
-	def register(cls, name: str) -> Callable:
+	def register_agent(cls, name: str) -> Callable:
 		def inner_wrapper(wrapped_class: 'TLSAgent') -> Callable:
 			if name in cls.registry:
 				warnings.warn(f'TLS controller {name} already exists. Will replace it')
@@ -31,7 +31,7 @@ class TLSFactory:
 
 
 	@classmethod
-	def get_registered_names(cls):
+	def get_registered_keys(cls):
 		"""
 		returns registered names
 		"""
@@ -115,7 +115,7 @@ class TLSAgent:
 		return self.variables.copy()
 
 
-@TLSFactory.register('base_timed')
+@TLSFactory.register_agent('base_timed')
 class TimedTLS(TLSAgent):
 	"""
 	Controller class model wrapping a standart
@@ -132,7 +132,7 @@ class TimedTLS(TLSAgent):
 		return next_phase
 
 
-@TLSFactory.register('base_recorded')
+@TLSFactory.register_agent('base_recorded')
 class RecordedTLS(TLSAgent):
 	"""
 	Controller class to replicated recorded sequence
@@ -155,7 +155,7 @@ class RecordedTLS(TLSAgent):
 		return next_phase
 
 
-@TLSFactory.register('base_crosswalk')
+@TLSFactory.register_agent('base_crosswalk')
 class CrosswalkTLS(TimedTLS):
 	"""
 	Controller class for a pedestrian responsive crosswalk controller

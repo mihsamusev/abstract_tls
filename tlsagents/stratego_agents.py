@@ -51,19 +51,20 @@ class StategoOptimizer(StrategoController):
 		return durations, actions
 
 
-@TLSFactory.register('stratego')
+@TLSFactory.register_agent('stratego')
 class StrategoTLS(TLSAgent):
 	"""
 	Controller class for a pedestrian responsive crosswalk controller
 	"""
-	def __init__(self, tls_id, constants=None, variables=None, data_query=None, optimizer=None):
+	def __init__(self, tls_id, constants=None, variables=None,
+		data_query=None, optimizer=None):
 		super().__init__(tls_id, constants, variables, data_query, optimizer)
 
 		self.mpc_step = self.constants.get('mpc_step', 5)
 		self.min_green = self.constants.get('min_green', 4)
 		self.uppaal_model_template = self.constants.get('model_template')
-		self.uppaal_query = self.constants.get('query', None)
-		self.uppaal_verifyta = self.constants.get('verifyta', 'verifyta')
+		self.uppaal_query = self.constants.get('verifyta_query', "")
+		self.uppaal_verifyta = self.constants.get('verifyta_command', 'verifyta')
 		self.uppaal_debug = self.constants.get('debug', False)
 
 		self.optimizer = StategoOptimizer(
@@ -82,4 +83,6 @@ class StrategoTLS(TLSAgent):
 
 		durations, phase_seq  = self.optimizer.run(
 			queryfile=self.uppaal_query,
-			verifyta_path=self.uppaal_verifyta)
+			verifyta_command=self.uppaal_verifyta)
+
+		stuff = None

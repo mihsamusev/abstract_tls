@@ -5,7 +5,10 @@ import shutil
 import confuse
 import json
 
+from confuse.templates import TypeTemplate
+
 from tlsagents.base import TLSFactory
+
 
 class FilenameValidate(confuse.Filename):
     """
@@ -14,6 +17,9 @@ class FilenameValidate(confuse.Filename):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self):
+        return f'Filename relative to {self.cwd}'
+
     def value(self, view, template=None):
         path = super().value(view, template)
         if os.path.exists(path):
@@ -21,10 +27,14 @@ class FilenameValidate(confuse.Filename):
         else:
             self.fail(f"No such file or directory: {path}", view, True)
 
+
 class ExecutableValidate(confuse.Template):
     """
     Check existence of executables using "which" command
     """
+    def __repr__(self):
+        return f'Executable()'
+
     def value(self, view, template=None):
         path = view.get()
         abs_path = shutil.which(path)
@@ -32,6 +42,15 @@ class ExecutableValidate(confuse.Template):
             return path
         else:
             self.fail(f"No such executable: {path}", view, True)
+
+
+class AllowedContainers(TypeTemplate):
+    def __init__(self, typ):
+        super().__init__(typ)
+
+    def __repr__(self):
+        return repr(self.typ)
+
 
 def get_valid_config():
     """
@@ -69,27 +88,30 @@ def get_valid_config():
     tls_template = confuse.Sequence({
             "id": str,
             "controller": confuse.Choice(
-                TLSFactory.get_registered_names()),
+                TLSFactory.get_registered_keys()),
             "constants": confuse.MappingValues(
                 confuse.OneOf([
                     confuse.Number(),
-                    confuse.TypeTemplate(list),
-                    FilenameValidate(cwd=job_config.job.dir)
+                    AllowedContainers(list),
+                    AllowedContainers(dict),
+                    FilenameValidate(cwd=job_config.job.dir),
+                    ExecutableValidate()
                 ])
             ),
             "variables": confuse.MappingValues(
                 confuse.OneOf([
                     confuse.Number(),
-                    confuse.TypeTemplate(list)
+                    AllowedContainers(list)
                 ])
             ),
             "extract": confuse.Sequence({
-                "user_type": str, # NB! is not really validated before FE
+                "user_class": confuse.Choice(
+                    ["bicycle", "passenger", "pedestrian", "bus", "truck", "moped"]),
                 "feature": confuse.Choice(
                     ["count", "speed", "eta", "delay", "waiting_time"]),
                 "from": confuse.Choice(
                     ["lane", "detector", "phase"]),
-                "mapping": dict
+                "mapping": AllowedContainers(dict)
             })
         })
 

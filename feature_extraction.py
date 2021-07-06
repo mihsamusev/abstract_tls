@@ -47,17 +47,17 @@ def add_to_state(state, target, value):
         state[target] += value
     return state
 
-def add_typed_lane_count(state, lane, target, user_type="DEFAULT_VEHTYPE"):
+def add_typed_lane_count(state, lane, target, user_class="passenger"):
     """
     Extracts accumulated number of users from a lane and inserts
     to the state passed to Stratego
     """
     ids = traci.lane.getLastStepVehicleIDs(lane)
-    number = sum([1 for i in ids if traci.vehicle.getTypeID(i) == user_type])
+    number = sum([1 for i in ids if traci.vehicle.getVehicleClass(i) == user_class])
     state = add_to_state(state, target, number)
     return state
 
-def add_typed_phase_count(state, tls_id, phase_id, target, user_type="DEFAULT_VEHTYPE"):
+def add_typed_phase_count(state, tls_id, phase_id, target, user_class="passenger"):
     """
     Extracts accumulated number of users served by tls phase and inserts
     to the state passed to Stratego
@@ -72,7 +72,7 @@ def add_typed_phase_count(state, tls_id, phase_id, target, user_type="DEFAULT_VE
     phase_links = set(
         [lane[0] for lane, col in zip(ctrl_links, phase_lights) if col.lower() == 'g'])
 
-    if user_type == "pedestrian":
+    if user_class == "pedestrian":
         ped_edges = [e for e in traci.edge.getIDList() if e.startswith(f":{tls_id}_w")]
         phase_cross_edges = [link[1].rsplit("_", 1)[0] for link in phase_links if link[0].startswith(":")]
         
@@ -88,7 +88,7 @@ def add_typed_phase_count(state, tls_id, phase_id, target, user_type="DEFAULT_VE
     else:
         lanes = set([lanes[0] for lanes in phase_links])
         for lane in lanes:
-            state = add_typed_lane_count(state, lane, target, user_type)
+            state = add_typed_lane_count(state, lane, target, user_class)
 
     return state
 
@@ -154,7 +154,7 @@ class TLSDataPipeline:
             if q["feature"] == "tls_state":
                 raise NotImplementedError
             elif q["feature"] == "count":
-                self.extract_counts(q["from"], q["user_type"], q["mapping"])
+                self.extract_counts(q["from"], q["user_class"], q["mapping"])
             elif q["feature"] == "speed":
                 raise NotImplementedError
             elif q["feature"] == "eta":
@@ -164,17 +164,17 @@ class TLSDataPipeline:
 
         return self.state
 
-    def extract_counts(self, origin, user_type, mapping):
+    def extract_counts(self, origin, user_class, mapping):
         """
         Extracts and adds queue length of given vtype
         """
         if origin == "lane": 
             for lane, target_var in mapping.items():
-                add_typed_lane_count(self.state, lane, target_var, user_type)
+                add_typed_lane_count(self.state, lane, target_var, user_class)
         elif origin == "detector":
             #for detector, target_var in mapping.items():
             NotImplementedError
         elif origin == "phase":
             for phase, target_var in mapping.items():
                 add_typed_phase_count(
-                    self.state, self.tls_id, phase, target_var, user_type)
+                    self.state, self.tls_id, phase, target_var, user_class)

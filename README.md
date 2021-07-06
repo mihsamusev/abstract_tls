@@ -29,6 +29,18 @@ python $SUMO_HOME/tools/randomTrips.py \
     --period 5 
 ```
 
+## Separation of tasks
+
+Concrete TLSAgent implementation:
+ - Sumbclass TLSAgent and implement `calclulate_next_phase()` method
+ - Register the agent using `TLSFactory.register_agent(<agent_name>)`
+
+Config manager ensures:
+ - existence of compulsory configuration fields
+ - valid formats, existsing file paths and executables are put in
+ - recognition of your custom TLSAgent as a valid controller method
+
+
 ## TLS description
 ```yml
 id:
