@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python: runner",
             "type": "python",
@@ -11,6 +12,12 @@
             "program": "runner.py",
             "console": "internalConsole",
             "args": ["-c", "configs/debug.yml"]
+        },
+        {
+            "name": "Python: current",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}"
         }
     ]
 }

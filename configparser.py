@@ -7,7 +7,6 @@ import json
 
 from tlsagents.base import TLSFactory
 
-
 class FilenameValidate(confuse.Filename):
     """
     Extend confuse.Filename to check existence of files and folders

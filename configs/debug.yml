@@ -40,14 +40,15 @@ tls:
       network_path: sumo/block.net.xml
 
   - id: C1
-    controller: stratego
+    controller: strategonodos
     constants:
-      horizon:
-      mpc_step:
-      min_green:
-      model_template:
-      verifyta_query:
-      verifyta_command:
-      debug:
+      horizon: 60
+      mpc_step: 5
+      min_green: 4
+      model_template: README.md
+      verifyta_query: README.md
+      verifyta_command: README.md
+      debug: False
     variables:
-    extract:
+      no: [1, 0, 0]
+      
