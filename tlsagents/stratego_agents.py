@@ -85,4 +85,3 @@ class StrategoTLS(TLSAgent):
 			queryfile=self.uppaal_query,
 			verifyta_command=self.uppaal_verifyta)
 
-		stuff = None

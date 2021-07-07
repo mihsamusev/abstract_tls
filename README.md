@@ -1,7 +1,8 @@
-trying to abstract controllers for SUMO controlller benchmarks
+# Table of Contents
+1. [TLS Description](#paragraph1)
 
 
-
+## Demand generation
 
 Demand is generated using `randomTrips.py`
 
@@ -29,11 +30,12 @@ python $SUMO_HOME/tools/randomTrips.py \
     --period 5 
 ```
 
-## Separation of tasks
+## Separation of tasks 
 
 Concrete TLSAgent implementation:
  - Sumbclass TLSAgent and implement `calclulate_next_phase()` method
  - Register the agent using `TLSFactory.register_agent(<agent_name>)`
+ - 
 
 Config manager ensures:
  - existence of compulsory configuration fields
@@ -41,7 +43,7 @@ Config manager ensures:
  - recognition of your custom TLSAgent as a valid controller method
 
 
-## TLS description
+## TLS description <a name="paragraph1"></a>
 ```yml
 id:
 controller:
@@ -49,7 +51,7 @@ controller:
     module: # if blank then will search in base folder for controllers
     constants:
         - MIN_TIME: 15
-    variables:
+    variables: # data used for decision making that can update every step, store MPC 
     extract:
         - feature_extraction_query_1:
         ...
@@ -76,11 +78,17 @@ controller:
 
 ## Feature extraction queries
 
+It is possible to extract both user_data as well as the traffic light data
+```
+```
+
+### User data
 ```yml
-feature:    # can be [count, speed, eta, waiting_time]
-user_type:  # can be [pedestrian, cyclist, vehicle type]
-from:       # can be [lane, phase or detector]
-mapping:    # dict of mapping between from types to dict keys for output
+user_data:
+-	feature:    # can be [count, speed, eta, waiting_time]
+	user_type:  # can be [pedestrian, cyclist, vehicle type]
+  from:       # can be [lane, phase or detector]
+  mapping:    # dict of mapping between from types to dict keys for output
     from_1: "to_1"
     ...
     from_n: "to_n"
@@ -89,23 +97,23 @@ mapping:    # dict of mapping between from types to dict keys for output
 for example, collect all pedestrians served during phases 0 and 1 of a tls
 
 ```yml
-feature: 'count'
-user_type: 'pedestrian'
-from: 'phase'
-mapping:
-    0: 'p0'
-    1: 'p1'
+-	feature: 'count'
+	user_type: 'pedestrian'
+	from: 'phase'
+	mapping:
+			0: 'p0'
+			1: 'p1'
 ```
 
+### Using the feature extraction pipeline
+If a query is provided to the TLS controller one can leverage
+the `data_pipeline` class and the `extract()` method to 
 ```python
-from feature_extraction import FeaturePipeline
 
-fe = FeaturePipeline(tls_id='A1', extract)
+def calculate_next_phase()
+		self.variables = self.data_pipeline.extract()
 
-for s in simulation_steps:
-    update_sumo()
-    state = fe.extract()
-    do_smth_awesome_with(state)
+
 ```
 
 ## Limitations
