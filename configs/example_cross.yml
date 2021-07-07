@@ -1,0 +1,69 @@
+job:
+  name: cross
+  dir: examples/cross
+  max_steps: 3000
+  logging: True
+  debug_tls: []
+
+sumo:
+  dir: "sumo"
+  gui: True
+  sumocfg: cross6VPS.sumocfg
+
+tls:
+  - id: C
+    controller: stratego
+    constants:
+      n_movement_phases: 4
+      horizon: 60
+      mpc_step: 4
+      min_green: 4
+      model_template: stratego/four_phase_template.xml
+      verifyta_query: stratego/four_phase_query.q
+      verifyta_command: verifyta
+      debug: False
+
+    variables:
+      A: [0, 0, 0]
+      B: [0, 0, 0]
+      CYC_A: 0
+      CYC_B: 0
+      PED_A: 0
+      PED_B: 0
+      x: 0.0
+      is_active: 0
+
+    extract:
+      user_data:
+      - feature: count
+        user_class: passenger
+        at: lane
+        mapping:
+          NC_4: ["A", 0]
+          NC_3: ["A", 1]
+          NC_2: ["A", 2]
+          SC_4: ["A", 0]
+          SC_3: ["A", 1]
+          SC_2: ["A", 2]
+          WC_4: ["B", 0]
+          WC_3: ["B", 1]
+          WC_2: ["B", 2]
+          EC_4: ["B", 0]
+          EC_3: ["B", 1]
+          EC_2: ["B", 2]
+      - feature: 'count'
+        user_class: 'bicycle'
+        at: 'phase'
+        mapping:
+          0: "CYC_A"
+          2: "CYC_B"
+      - feature: 'count'
+        user_class: 'bicycle'
+        at: 'phase'
+        mapping:
+          0: "PED_A"
+          2: "PED_B"
+
+      tls_data:
+      - feature: integer_phase
+        to_variable: is_active

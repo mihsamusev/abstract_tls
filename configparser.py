@@ -116,7 +116,7 @@ def get_valid_config():
                 }),
             "tls_data": confuse.Sequence({
                 "feature": confuse.Choice(
-                    ["elapsed_time", "binary_state"]),
+                    ["elapsed_time", "integer_phase", "binary_phase"]),
                 "to_variable": str
             })
         }

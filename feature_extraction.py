@@ -1,13 +1,12 @@
 import traci
 import copy
 
-def add_phase(state, target, tls_id, phase_map):
+def add_phase(state, target, tls_id):
     """
     Extracts and inserts TLS phase with traci 
     to the state passed to Stratego
     """
     phase = traci.trafficlight.getPhase(tls_id)
-    phase = phase_map.get(phase)
     if isinstance(state[target], list):
         state[target][phase] = 1
     else:
@@ -17,10 +16,19 @@ def add_phase(state, target, tls_id, phase_map):
 def add_duration(state, target, tls_id):
     """
     Extracts and inserts TLS phase duration with traci 
-    to the state passed to Stratego
+    to the state dict
     """
     duration = traci.trafficlight.getPhaseDuration(tls_id)
     state[target] = float(duration)
+    return state
+
+def add_elapsed(state, target, tls_id):
+    """
+    Extracts and inserts elapsed time of TLS phase to the state dict 
+    """
+    duration = traci.trafficlight.getPhaseDuration(tls_id)
+    remainder = traci.trafficlight.getNextSwitch(tls_id) - traci.simulation.getTime()
+    state[target] = float(duration - remainder)
     return state
 
 def add_queue(state, target, lane):
@@ -107,8 +115,10 @@ class TLSDataPipeline:
 
         self.detectors = None
         self.controlled_lanes = traci.trafficlight.getControlledLanes(self.tls_id)
-        self.walking_edges = [e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_w")]
-        self.crossing_edges = [e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_c")]
+        self.walking_edges = [
+            e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_w")]
+        self.crossing_edges = [
+            e for e in traci.edge.getIDList() if e.startswith(f":{self.tls_id}_c")]
         self.n_ped_signals = len(self.crossing_edges)
 
         self.validate_targets()
@@ -152,9 +162,7 @@ class TLSDataPipeline:
     def extract(self):
         self.reset_state()
         for q in self.query.user_data:
-            if q.feature == "tls_state":
-                raise NotImplementedError
-            elif q.feature == "count":
+            if q.feature == "count":
                 self.extract_counts(q.at, q.user_class, q.mapping)
             elif q.feature == "speed":
                 raise NotImplementedError
@@ -163,6 +171,14 @@ class TLSDataPipeline:
             elif q.feature == "waiting_time":
                 raise NotImplementedError
 
+        for q in self.query.tls_data:
+            if q.feature == "elapsed_time":
+                add_elapsed(self.state, q.to_variable, self.tls_id)
+            elif q.feature == "integer_phase":
+                add_phase(self.state, q.to_variable, self.tls_id)
+            elif q.feature == "binary_phase":
+                raise NotImplementedError
+           
         return self.state
 
     def extract_counts(self, origin, user_class, mapping):

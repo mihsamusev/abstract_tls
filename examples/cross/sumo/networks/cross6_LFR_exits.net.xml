@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on Wed 23 Jun 2021 10:00:24 AM CEST by Eclipse SUMO netedit Version v1_7_0+1095-7111e26d53
+<!-- generated on Wed 07 Jul 2021 01:00:05 PM CEST by Eclipse SUMO netedit Version v1_7_0+1095-7111e26d53
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
-        <sumo-net-file value="/home/msa/Documents/SUMO/sumo_stratego/example/sumo/networks/cross5_LFR_exits.net.xml"/>
+        <sumo-net-file value="examples/cross/sumo/networks/cross6_LFR_exits.net.xml"/>
     </input>
 
     <output>
-        <output-file value="/home/msa/Documents/SUMO/traci_multimodal/sumo/networks/cross6_LFR_exits.net.xml"/>
+        <output-file value="examples/cross/sumo/networks/cross6_LFR_exits.net.xml"/>
     </output>
 
     <processing>

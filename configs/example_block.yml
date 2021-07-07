@@ -2,7 +2,7 @@ job:
   name: latest
   dir: examples/block
   max_steps: 3000
-  logging: True
+  logging: True # maybe logging should be list [state, user_data]
   debug_tls: []
 
 sumo:

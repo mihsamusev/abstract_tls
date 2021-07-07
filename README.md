@@ -51,17 +51,20 @@ Config manager ensures:
 
 ## TLS description <a name="paragraph1"></a>
 ```yml
-id:
-controller:
-    class:
-    module: # if blank then will search in base folder for controllers
-    constants:
-        - MIN_TIME: 15
-    variables: # data used for decision making that can update every step, store MPC 
-    extract:
-        - feature_extraction_query_1:
+id: # existence of ID not validated
+controller: # validated
+constants:
+    - MIN_TIME: 15
+variables: # data used for decision making that can update every step, store MPC 
+extract:
+    user_data:
+        - user_data_extraction_query_1:
         ...
-        - feature_extraction_query_2:
+        - user_data_extraction_query_n:
+    tls_data:
+        - tls_data_extraction_query_1:
+        ...
+        - tls_data_extraction_query_m:
 ```
 
 For example
@@ -75,10 +78,11 @@ controller:
 	variables:
 		ped_count: 0
 	extract:
-		- feature: count
-			user_type: pedestrian
+        user_data:
+		    - feature: count
+		    user_type: pedestrian
 			at: phase
-			map:
+			mapping:
 				2: "ped_count" 
 ```
 
@@ -92,7 +96,7 @@ It is possible to extract both user_data as well as the traffic light data
 
 ```yml
 user_data:
--	feature:    # can be [count, speed, eta, waiting_time]
+    - feature:    # can be [count, speed, eta, waiting_time]
 	user_type:  # can be [pedestrian, cyclist, vehicle type]
   at:       # can be [lane, phase or detector]
   mapping:    # dict of mapping between "at" types to dict keys for output
@@ -105,7 +109,7 @@ for example, collect all pedestrians served during phases 0 and 1 of a tls
 
 ```yml
 user_data:
--	feature: 'count'
+    - feature: 'count'
 	user_type: 'pedestrian'
 	at: 'phase'
 	mapping:
@@ -125,13 +129,14 @@ tls_data:
 ### Using the feature extraction pipeline
 If a query is provided to the TLS controller one can leverage
 the `data_pipeline` class and the `extract()` method to 
+
 ```python
-
 def calculate_next_phase()
-		self.variables = self.data_pipeline.extract()
-
+	self.variables = self.data_pipeline.extract()
 
 ```
 
-## Limitations
-Single node intersections, no clusters
+## Limitations / Details
+- Single node intersections, no clusters
+- No communications between TLS
+- Will use last loaded traffic lights program, either initial or by `*.tll.xml`

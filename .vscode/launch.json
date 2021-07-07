@@ -6,15 +6,23 @@
     "configurations": [
 
         {
-            "name": "Python: runner",
+            "name": "example cross",
             "type": "python",
             "request": "launch",
             "program": "runner.py",
             "console": "internalConsole",
-            "args": ["-c", "configs/debug.yml"]
+            "args": ["-c", "configs/example_cross.yml"]
         },
         {
-            "name": "Python: current",
+            "name": "example block",
+            "type": "python",
+            "request": "launch",
+            "program": "runner.py",
+            "console": "internalConsole",
+            "args": ["-c", "configs/example_block.yml"]
+        },
+        {
+            "name": "current",
             "type": "python",
             "request": "launch",
             "program": "${file}"
