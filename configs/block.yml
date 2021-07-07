@@ -1,5 +1,6 @@
 job:
   name: latest
+  dir: examples/block
   max_steps: 3000
   logging: True
   debug_tls: []
@@ -17,9 +18,10 @@ tls:
     variables:
       ped_count: 0
     extract:
+      user_data:
       - feature: count
         user_class: pedestrian
-        from: phase
+        at: phase
         mapping:
           2: ped_count
 
@@ -28,9 +30,10 @@ tls:
     variables:
       ped_count: 0
     extract:
+      user_data:
       - feature: count
         user_class: pedestrian
-        from: phase
+        at: phase
         mapping:
           2: ped_count
 

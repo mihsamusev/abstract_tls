@@ -34,7 +34,7 @@ tls:
       user_data:
       - feature: count
         user_class: passenger
-        from: lane
+        at: lane
         mapping:
           C01_1: ["A", 0]
           C01_2: ["A", 1]

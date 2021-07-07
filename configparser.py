@@ -86,40 +86,47 @@ def get_valid_config():
     }
 
     tls_template = confuse.Sequence({
-            "id": str,
-            "controller": confuse.Choice(
-                TLSFactory.get_registered_keys()),
-            "constants": confuse.MappingValues(
-                confuse.OneOf([
-                    confuse.Number(),
-                    AllowedContainers(list),
-                    AllowedContainers(dict),
-                    FilenameValidate(cwd=job_config.job.dir),
-                    ExecutableValidate()
-                ])
-            ),
-            "variables": confuse.MappingValues(
-                confuse.OneOf([
-                    confuse.Number(),
-                    AllowedContainers(list)
-                ])
-            ),
-            "extract": confuse.Sequence({
-                "user_class": confuse.Choice(
-                    ["bicycle", "passenger", "pedestrian", "bus", "truck", "moped"]),
+        "id": str,
+        "controller": confuse.Choice(
+            TLSFactory.get_registered_keys()),
+        "constants": confuse.MappingValues(
+            confuse.OneOf([
+                confuse.Number(),
+                AllowedContainers(list),
+                AllowedContainers(dict),
+                FilenameValidate(cwd=job_config.job.dir),
+                ExecutableValidate()
+            ])
+        ),
+        "variables": confuse.MappingValues(
+            confuse.OneOf([
+                confuse.Number(),
+                AllowedContainers(list)
+            ])
+        ),
+        "extract": {
+            "user_data": confuse.Sequence({
                 "feature": confuse.Choice(
                     ["count", "speed", "eta", "delay", "waiting_time"]),
-                "from": confuse.Choice(
+                "user_class": confuse.Choice(
+                    ["bicycle", "passenger", "pedestrian", "bus", "truck", "moped"]),
+                "at": confuse.Choice(
                     ["lane", "detector", "phase"]),
                 "mapping": AllowedContainers(dict)
+                }),
+            "tls_data": confuse.Sequence({
+                "feature": confuse.Choice(
+                    ["elapsed_time", "binary_state"]),
+                "to_variable": str
             })
-        })
+        }
+    })
 
     full_template = {
         "sumo": sumo_template,
         "tls": tls_template,
     }
-    full_template.update(job_template)
+    job_template.update(full_template)
     valid_config = config.get(full_template)
 
     return valid_config
