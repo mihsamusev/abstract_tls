@@ -5,7 +5,6 @@ import shutil
 import confuse
 import json
 
-from confuse.templates import TypeTemplate
 
 from tlsagents.base import TLSFactory
 
@@ -44,7 +43,7 @@ class ExecutableValidate(confuse.Template):
             self.fail(f"No such executable: {path}", view, True)
 
 
-class AllowedContainers(TypeTemplate):
+class AllowedContainers(confuse.templates.TypeTemplate):
     def __init__(self, typ):
         super().__init__(typ)
 
@@ -52,15 +51,10 @@ class AllowedContainers(TypeTemplate):
         return repr(self.typ)
 
 
-def get_valid_config():
+def get_valid_config(args):
     """
     Get a config dict for CLI and valdate all parameters
     """
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-c", "--config", type=str, required=True,
-        help="yaml configuration file")
-    args = ap.parse_args()
-
     source = confuse.YamlSource(args.config)
     config = confuse.RootView([source])
 
@@ -72,17 +66,27 @@ def get_valid_config():
                     cwd=str(pathlib.Path(__file__).parent.absolute())),
                     default=str(pathlib.Path(__file__).parent.absolute())
             ),
-            "max_steps": 10e5,
-            "logging": bool     
+            "max_steps": confuse.Optional(int, default=10e5),
         }
     }
     job_config = config.get(job_template)
+
+    logging_template = confuse.Optional(
+            confuse.MappingTemplate({
+                'ids': confuse.StrSeq(),
+                'data': confuse.Sequence(
+                   confuse.Choice(['objectives', 'state', 'variables'])),
+                'timestamped': confuse.Optional(bool, default=True),
+                "to_file": confuse.Optional(bool, default=True),
+                "to_console": confuse.Optional(bool, default=False)
+            })
+        )
 
     sumo_template = {
         "dir": FilenameValidate(
             cwd=job_config.job.dir),
         "sumocfg": FilenameValidate(relative_to="dir"),
-        "gui": True,
+        "gui": confuse.Optional(bool, default=True),
     }
 
     tls_template = confuse.Sequence({
@@ -123,14 +127,28 @@ def get_valid_config():
     })
 
     full_template = {
+        "logging": logging_template,
         "sumo": sumo_template,
         "tls": tls_template,
     }
     job_template.update(full_template)
-    valid_config = config.get(full_template)
+    valid_config = config.get(job_template)
+
+    # second round of logger validation, look if ids are given
+    if valid_config.logging:
+        if valid_config.logging.ids and valid_config.logging.data:
+            output_dir = os.path.join(valid_config.job.dir, "output")
+            os.makedirs(output_dir, exist_ok=True)
+            valid_config.logging.update({"dir": output_dir})
+        else:
+            del valid_config['logging']
 
     return valid_config
 
 if __name__ == "__main__":
-    cfg = get_valid_config()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-c", "--config", type=str, required=True,
+        help="yaml configuration file")
+    args = ap.parse_args()
+    cfg = get_valid_config(args)
     print(json.dumps(cfg, indent=4))

@@ -1,33 +1,40 @@
+import logging
 import sys
+import argparse
+
 
 from sumolib import checkBinary
 import traci
 
+
 from tlsagents.base import TLSFactory
-from resultlogger import get_logger
+from resultlogger import get_logger, TLSLogger
 import configparser as cp
 
 
-def run(tls_list, logger=None, debug_tls=None):
+def run(tls_list, logger, max_steps=10000):
     """
     Main simulation loop
     """
-    while traci.simulation.getMinExpectedNumber() > 0:
+    step = 0
+    while traci.simulation.getMinExpectedNumber() > 0 and step < max_steps:
+        # update simulation state
         traci.simulationStep()
+        step += 1
         time = traci.simulation.getTime()
-        print("Time: {}".format(time))
 
+        # update tls state and data
         for tls in tls_list:
             tls.update_state()
-            print("\t{} {}".format(tls.get_state_dict(), tls.get_variables()))
         
             # log tls states
             if logger:
-                logger.info('%s', {"time": time, "states": tls.get_state_dict()})
-    
-            # debug data
-            #if tls.tls_id in debug_tls:
-                #tls.debug()
+                if tls.tls_id in logger.tls_ids:
+                    data_dict = tls.decsribe_step()
+                    logger.log(time, data_dict)
+
+        if logger:
+            print()
 
     # finalize
     sys.stdout.flush()
@@ -35,13 +42,19 @@ def run(tls_list, logger=None, debug_tls=None):
 
 
 if __name__ == "__main__":
-    # read job configuration
-    cfg = cp.get_valid_config()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-c", "--config", type=str, required=True,
+        help="yaml configuration file defining the simulation")
+    args = ap.parse_args()
+    cfg = cp.get_valid_config(args)
 
     # Initialize SUMO simulator
     sumo_bin_name = 'sumo-gui' if cfg.sumo.gui else 'sumo'
     sumo_bin = checkBinary(sumo_bin_name)
-    traci.start([sumo_bin, "-c", cfg.sumo.sumocfg])
+    traci.start([sumo_bin, "-c", cfg.sumo.sumocfg, "--start", "--quit-on-end"])
+
+    # validate nodes
+
 
     # this is build with a bulder design pattern from config
     tls_list = []
@@ -56,8 +69,20 @@ if __name__ == "__main__":
         tls = TLSFactory.create_agent(tls_type, **kwargs)
         tls_list.append(tls)
 
-    #tls_logger = get_logger("test", directory="/home/msa/Documents/SUMO/abstract_tls/log", is_timestamped=True)
-    tls_logger = None
-    run(tls_list, logger=None, debug_tls=False)
+    # create logger
+    logger = None
+    if cfg.get('logging'):
+        logger = TLSLogger(
+            cfg.job.name,
+            cfg.logging.ids,
+            cfg.logging.data,
+            to_file=cfg.logging.to_file,
+            to_console=cfg.logging.to_console,
+            directory=cfg.logging.dir,
+            is_timestamped=cfg.logging.timestamped
+        )
+
+    # simulate
+    run(tls_list, logger, max_steps=cfg.job.max_steps)
 
 

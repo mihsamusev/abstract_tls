@@ -57,6 +57,7 @@ class TLSAgent:
 		self.n_phases = len(self.phase_list)
 		self.elapsed = 0
 		
+		self.objectives = {}
 		self.constants = constants
 		self.variables = {}
 		if variables:
@@ -97,7 +98,20 @@ class TLSAgent:
 			self.elapsed = 0
 			traci.trafficlight.setPhase(self.tls_id, self.phase)
 
-	def get_state_dict(self):
+	def decsribe_step(self):
+		"""
+		print all available tls data of the step
+		"""
+		return {
+            "state": self.get_state(),
+            "variables": self.get_variables(),
+			"objectives": self.get_objectives(),
+            }
+
+	def get_objectives(self):
+		return self.objectives
+
+	def get_state(self):
 		"""
 		Return traffic signal state
 		"""
@@ -133,7 +147,7 @@ class TimedTLS(TLSAgent):
 
 
 @TLSFactory.register_agent('base_recorded')
-class RecordedTLS(TLSAgent):
+class RecordedTLS(TimedTLS):
 	"""
 	Controller class to replicated recorded sequence
 	from a controller log
@@ -141,11 +155,12 @@ class RecordedTLS(TLSAgent):
 	def __init__(self, tls_id, constants=None, variables=None, data_query=None, optimizer=None):
 		super().__init__(tls_id, constants, variables, data_query, optimizer)
 		self.idx = 0
-		
+
 		self.phase_sequence = self.constants.get("sequence")
 		assert self.phase_sequence is not None, \
 			f"No key 'sequence' in constants for {self.tls_id}"
 		self.phase = self.phase_sequence[self.idx]["phase"]
+		self.recorded_length = len(self.phase_sequence)
 
 	def calculate_next_phase(self):
 		next_phase = self.phase

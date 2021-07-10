@@ -7,6 +7,10 @@ Welcome to sumotllab - a SUMO based simulation environment to test and implement
 ## Table of Contents
 1. [TLS Description](#paragraph1)
 
+## Supported types of run
+
+One network, one set of tls, N runs
+
 
 ## Demand generation
 
@@ -134,6 +138,27 @@ the `data_pipeline` class and the `extract()` method to
 def calculate_next_phase()
 	self.variables = self.data_pipeline.extract()
 
+```
+
+## Extend framework with your own agents
+- New agent shall be saved in a `*.py` file under `tlsagents` directory
+- New agent shall implement a custom `calculate_next_phase()` method
+- New agent shall be registered using a decorator`TLSFactory.register_agent(<AGENTS_NAME>)`
+
+Following example implements a controller that outputs a random phase each simulation step
+
+```python
+from tlsagents.base import TLSAgent, TLSFactory
+import random
+
+@TLSFactory.register_agent('my_new_ctrl')
+class OneWeirdTLS(TLSAgent):
+    def __init__(self, tls_id, constants=None, variables=None,
+        data_query=None, optimizer=None):
+        super().__init__(tls_id, constants, variables, data_query, optimizer)
+
+    def calculate_next_phase(self):
+        return random.randint(0, self.n_phases-1)
 ```
 
 ## Limitations / Details

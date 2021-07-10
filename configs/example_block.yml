@@ -2,8 +2,12 @@ job:
   name: latest
   dir: examples/block
   max_steps: 3000
-  logging: True # maybe logging should be list [state, user_data]
-  debug_tls: []
+  
+logging:
+  ids: [B1]
+  data: [state]
+  to_file: True
+  to_console: True
 
 sumo:
   dir: "sumo"
@@ -36,7 +40,4 @@ tls:
         at: phase
         mapping:
           2: ped_count
-
-  - id: A1
-    controller: base_timed
 
