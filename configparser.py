@@ -66,7 +66,6 @@ def get_valid_config(args):
                     cwd=str(pathlib.Path(__file__).parent.absolute())),
                     default=str(pathlib.Path(__file__).parent.absolute())
             ),
-            "max_steps": confuse.Optional(int, default=10e5),
         }
     }
     job_config = config.get(job_template)
@@ -85,9 +84,15 @@ def get_valid_config(args):
     sumo_template = {
         "dir": FilenameValidate(
             cwd=job_config.job.dir),
-        "sumocfg": FilenameValidate(relative_to="dir"),
         "gui": confuse.Optional(bool, default=True),
+        "max_steps": confuse.Optional(int, default=10e5),
+        "network": FilenameValidate(relative_to="dir"),
     }
+    sumo_config = config.get({"sumo": sumo_template})
+    sumo_template["additional"] = confuse.Sequence(
+            FilenameValidate(cwd=sumo_config.sumo.dir))
+    sumo_template["route"] = confuse.Sequence(
+            FilenameValidate(cwd=sumo_config.sumo.dir))
 
     tls_template = confuse.Sequence({
         "id": str,
@@ -134,6 +139,10 @@ def get_valid_config(args):
     job_template.update(full_template)
     valid_config = config.get(job_template)
 
+    # second round of sumo validation
+    assert len(valid_config.sumo.route) > 0, \
+        "No demand definition: sumo.route is an empty list, expected at least one *.rou.xml"
+    
     # second round of logger validation, look if ids are given
     if valid_config.logging:
         if valid_config.logging.ids and valid_config.logging.data:

@@ -12,6 +12,8 @@ from resultlogger import get_logger, TLSLogger
 import configparser as cp
 
 
+SUMO_GUI_CONFIG = "sumo_gui_config.xml"
+
 def run(tls_list, logger, max_steps=10000):
     """
     Main simulation loop
@@ -48,10 +50,25 @@ if __name__ == "__main__":
     args = ap.parse_args()
     cfg = cp.get_valid_config(args)
 
-    # Initialize SUMO simulator
+    # Initialize SUMO simulator and prepare arguments
     sumo_bin_name = 'sumo-gui' if cfg.sumo.gui else 'sumo'
     sumo_bin = checkBinary(sumo_bin_name)
-    traci.start([sumo_bin, "-c", cfg.sumo.sumocfg, "--start", "--quit-on-end"])
+    
+    sumo_args = {
+        "--net-file": cfg.sumo.network,
+        "--additional-files": ",".join(cfg.sumo.additional),
+        "--route-files": ",".join(cfg.sumo.route),
+        "--gui-settings-file": SUMO_GUI_CONFIG
+    }
+
+    sumo_command = [sumo_bin]
+    for k, v in sumo_args.items():
+        if v:
+            sumo_command.append(k)
+            sumo_command.append(v)
+
+    print("Starting simulation with:\n{}".format(" ".join(sumo_command)))
+    traci.start(sumo_command)
 
     # validate nodes
 
@@ -83,6 +100,6 @@ if __name__ == "__main__":
         )
 
     # simulate
-    run(tls_list, logger, max_steps=cfg.job.max_steps)
+    run(tls_list, logger, max_steps=cfg.sumo.max_steps)
 
 

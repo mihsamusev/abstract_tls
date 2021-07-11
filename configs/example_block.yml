@@ -1,18 +1,20 @@
 job:
   name: latest
   dir: examples/block
-  max_steps: 3000
   
 logging:
   ids: [B1]
-  data: [state]
+  data: [state, state]
   to_file: True
   to_console: True
 
 sumo:
   dir: "sumo"
   gui: True
-  sumocfg: run.sumocfg
+  max_steps: 3000
+  network: block.net.xml
+  additional: []
+  route: [vehicles.rou.xml, pedestrians.rou.xml]
 
 tls:
   - id: B1
