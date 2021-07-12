@@ -43,6 +43,3 @@ tls:
         mapping:
           2: ped_count
 
-  - id: A1
-    controller: random
-

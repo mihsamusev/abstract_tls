@@ -14,7 +14,7 @@ Configuration file:
 
 ## Example
 
-Following example implements a controller that outputs a random phase each simulation step. Firstly create a python file under `tlsagents` folder, create your custom class that inherits from `TLSAgent`. In the `__init__` method describe specific application of `constants`, `variables`, `data_query` and `optimizer` if necessary. Then implement the `calculate_next_phase()` method that returns an integer id of the phase described in the current SUMO [`tlLogic`](https://sumo.dlr.de/docs/Simulation/Traffic_Lights.html#defining_new_tls-programs) that came eitther with the network `*.net.xml` file or as an additional [`*.add.xml`](https://sumo.dlr.de/docs/sumo.html#format_of_additional_files) file. Remember to register your agent with `@TLSFactory.register_agent` decorator as the config validation will return an error if the agent is not in the register.
+Following example implements a controller that outputs a random phase each simulation step. Firstly create a python file under `tlsagents/` folder. Create a custom agent class that inherits from `TLSAgent`. In the `__init__` method describe specific application of `constants`, `variables`, `data_query` and `optimizer` if necessary. Then implement the `calculate_next_phase()` method that returns an integer id of the phase described in the current SUMO [`tlLogic`](https://sumo.dlr.de/docs/Simulation/Traffic_Lights.html#defining_new_tls-programs) that came eitther with the network `*.net.xml` file or as an additional [`*.add.xml`](https://sumo.dlr.de/docs/sumo.html#format_of_additional_files) file. Remember to register your agent with `@TLSFactory.register_agent` decorator as the config validation will return an error if the agent is not in the register.
 
 ```python
 # tlsagents/custom_agents.py
@@ -42,7 +42,7 @@ tls:
 ...
 ```
 
-Running the simulation will result in the following visuals
+Running the simulation will result in the following visuals.
 ```bash
 python runner.py -c configs/custom_run.yml
 ```
