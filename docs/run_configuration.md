@@ -1,9 +1,5 @@
-<style>
-  table {margin-left: 0 !important;}
-</style>
-
 # Run configurations
-The simulation task for `runner.py` is specified inside a `*.yml` configuration file. In the following the building blocks of such configuration file are described. An example of a configuration file can be found in [`configs/example_block.yml`](configs/example_block.yml). The general structure of all configurations includes following fields.
+The simulation task for `runner.py` is specified inside a `*.yml` configuration file. In the following the building blocks of such configuration file are described. An example of a configuration file can be found in [`configs/example_block.yml`](../configs/example_block.yml). The general structure of all configurations includes following fields.
 
 | Key | Required | Type | Description |
 | :--- | :--- | :--- | :--- |
@@ -61,10 +57,10 @@ The `tls` field allows to specify a list of nodes controlled by agents together 
 | `id`       | Yes| String | List of SUMO network node IDs controlled by the agent.|
 | `controller`| Yes| String | Controller name that is registered under `tlsagents/` directories. |
 | `constants` | No | Map | Key / value pairs describing constants that controller is initialized with. The application of the constants is up to the concrete controller impelmentation. |
-| `variables` | No | Map | Key / value pairs describing variables that the controller updates every simulation step. The variables are populated  The application of the variables is up to the concrete controller impelmentation. |
-| `extract`   | No | Map | Data extraction query that describes which road users to register and to which variables to write the results. More in [tls[*].extract](#tls[*].extract). |
+| `variables` | No | Map | Key / value pairs declaration of variables that the controller requests from the simulator every simulation step. The variables are populated using `tls[*].extract` query. The application of the variables is up to the concrete controller impelmentation. |
+| `extract`   | No | Map | Data extraction query that describes which road users to register and to which variables to write the results. More in [tls[*].extract](#tls\[\*\]\.extract). |
 
-**Example**: Definition of 2 controllers, a timed controller at A1 and a pedestrian responsive controller at B1. The B1 controller extracts the count of pedestrians served at phase 2 of its SUMO `tlLogic` program definition and writes it to the `ped_count` variable. The logic of how `base_crosswalk` calculates a new phase given the inputs is defined in [`tlsagents/base.py`](`../tlsagents/base.py`).
+**Example**: Definition of 2 controllers, a timed controller at A1 and a pedestrian responsive controller at B1. The B1 controller extracts the count of pedestrians served at phase 2 of its SUMO `tlLogic` program definition and writes it to the `ped_count` variable. In addition to that we would like to extract the elapsed time of the current phase and store it in `duration` variable. The logic of how the `base_crosswalk` calculates a new phase given the variables is defined in [`tlsagents/base.py`](../tlsagents/base.py).
 ```yml
 tls:
   - id: A1
@@ -72,62 +68,90 @@ tls:
 
   - id: B1
     controller: base_crosswalk
-	  constants:
-		  MIN_TIME: 15
+    constants:
+      MIN_TIME: 15
     variables:
-		  ped_count: 0
-	  extract:
+      ped_count: 0
+      duration: 0
+    extract:
       user_data:
-		    - feature: count
-		      user_type: pedestrian
-			    at: phase
-			    mapping:
-				    2: "ped_count" 
+        - feature: count
+          user_type: pedestrian
+          at: phase
+          mapping:
+            2: "ped_count"
+      tls_data:
+        - feature: elapsed_time
+          to_variable: duration 
 ```
-### `tls[*].extract`
-### `tls[*].extract.user_data`
+ ### `tls[i].extract`
+
+The `tls[i].variables` can be populated either with registered road user data or with the traffic light data itself. The `tls[i].extract` provides syntax for both cases.
+
+| Key | Required | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `user_data` | No | List | List of queries used to write data about registered road users into `tls[i].variables`|
+| `tls_data`  | No | List | List of queries used to write data about the traffic light parameters into `tls[i].variables`|
+
+If both variables an extract query are provided to the controller one can leverage
+the `data_pipeline` class and the `extract()` method to retreive requested traffic data at each simulation step. 
+
+**Example**: Implementation of next phase decision based on extracted user data.
+```python
+def calculate_next_phase(self):
+  self.variables = self.data_pipeline.extract()
+  next_phase = do_something_with_variables(self.variables)
+  return next_phase
+```
+
+### `tls[i].extract.user_data`
+
+| Key | Required | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `feature` | Yes | String | Type of the extracted traffic data. Currently supported are: `count`. |
+| `user_class`  | Yes | String | [SUMO user class](https://sumo.dlr.de/docs/Definition_of_Vehicles%2C_Vehicle_Types%2C_and_Routes.html#abstract_vehicle_class) withing the simulation environment. Currently supported are: `bicycle`, `passenger`, `pedestrian`, `bus`, `truck`, `moped`.|
+| `at`| Yes | String | The origin / source within SUMO simulation at which the `user_class` is registered. Currently supported are: `lane`, `detector`, `phase`.|
+| `mapping` | Yes | Map | Key / value pair mapping between the IDs / names of the `tls[i].extract.user_data[j].at` and `tls[i].extract.variables.<name>`|
+
+**Example**: Collect all pedestrian counts served during phases 0 and 1.
 
 ```yml
-user_data:
-  - feature:    # can be [count, speed, eta, waiting_time]
-	  user_type:  # can be [pedestrian, cyclist, vehicle type]
-    at:       # can be [lane, phase or detector]
-    mapping:    # dict of mapping between "at" types to dict keys for output
-      sumo_name_1: "variable_name_1"
-      ...
-      sumo_name_n: "variable_name_n"
-```
-
-for example, collect all pedestrians served during phases 0 and 1 of a tls
-
-```yml
-user_data:
-  - feature: 'count'
-	  user_type: 'pedestrian'
-	  at: 'phase'
-	  mapping:
-      0: 'p0'
-      1: 'p1'
+tls:
+  - id: C1
+    controller: my_pedestrian_ctrl
+    variables:
+      p0: 0
+      p1: 0
+    extract:
+      user_data:
+        - feature: 'count'
+        user_type: 'pedestrian'
+        at: 'phase'
+        mapping:
+          0: 'p0'
+          1: 'p1'
 ```
 
 ### `tls[*].extract.traffic_data`
+
+| Key | Required | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `feature` | Yes | String | Type of the extracted traffic light state data. Currently supported are: `elapsed_time`, `integer_phase`, `binary_phase`. |
+| `to_variable`  | Yes | String | Name of the variable to which the requested data is written `tls[i].extract.variables.<name>`. |
+
+**Example**: 
 ```yml
-tls_data:
-	- feature: elapsed_time # can be []
-		to_var: x
-
+tls:
+- id: A1
+  variables:
+    x: 0
+  extract:
+    tls_data:
+    - feature: elapsed_time
+      to_var: x
 ```
 
-
-### Using the feature extraction pipeline
-If a query is provided to the TLS controller one can leverage
-the `data_pipeline` class and the `extract()` method to 
-
-```python
-def calculate_next_phase()
-	self.variables = self.data_pipeline.extract()
-
-```
+_Alternative way of extracting the traffic data is to use `TLSAgent` own variables `self.phase` and `self.elapsed`._
 
 ## `logging`
 The `logging` field is an optional field that specifies the ids of the agents to be logged and types of information that has to be logged.
