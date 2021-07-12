@@ -47,4 +47,4 @@ Running the simulation will result in the following visuals
 python runner.py -c configs/custom_run.yml
 ```
 
-![random_controller](docs/images/random_controller.gif)
+![random_controller](images/random_controller.gif)
