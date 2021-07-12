@@ -125,11 +125,11 @@ tls:
     extract:
       user_data:
         - feature: 'count'
-        user_type: 'pedestrian'
-        at: 'phase'
-        mapping:
-          0: 'p0'
-          1: 'p1'
+          user_type: 'pedestrian'
+          at: 'phase'
+          mapping:
+            0: 'p0'
+            1: 'p1'
 ```
 
 ### `tls[*].extract.traffic_data`

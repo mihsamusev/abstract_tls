@@ -1,28 +1,33 @@
 # sumotllab
 
-Welcome to sumotllab - a SUMO based simulation environment to test and implement your traffic control algorithms.
+Welcome to `sumotllab` - a SUMO based simulation environment to implement and benchmark your traffic control algorithms.
 
-[use this CircleCI example for documentation](https://circleci.com/docs/2.0/configuration-reference/)
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
-## Table of Contents
-1. [TLS Description](#paragraph1)
+## Getting started
+### Installing the project repository
+```sh
+git clone https://github.com/mihsamusev/sumotlslab.git
+```
 
-## Supported types of run
+### Installing dependencies
+Recommended to create `conda` environment from provided configuration file.
+```sh
+conda env create -f environment.yml
+conda activate sumotlslab
+```
 
-One network, one set of tls, N runs
-
-
-## Installation
-- SUMO
-- strategoutils
-- confuse
-
-## Separation of tasks 
-
-[extend_framework](/docs/extend_framework.md)
-
+### Installing SUMO
+Coming soon
 
 
+### Documentation
+1. [Run configuration file](docs/run_configuration.md)
+2. [Adding your own controllers](docs/extend_framework.md)
+3. [Examples](docs/examples.md)
+
+## Agent Zoo
+Coming soon
 
 ## Limitations / Details
 - Single node intersections, no clusters

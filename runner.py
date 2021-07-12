@@ -1,14 +1,14 @@
-import logging
 import sys
 import argparse
 
 
 from sumolib import checkBinary
+import sumolib
 import traci
 
 
 from tlsagents.base import TLSFactory
-from resultlogger import get_logger, TLSLogger
+from resultlogger import TLSLogger
 import configparser as cp
 
 
@@ -50,6 +50,13 @@ if __name__ == "__main__":
     args = ap.parse_args()
     cfg = cp.get_valid_config(args)
 
+    # validate nodes
+    net = sumolib.net.readNet(cfg.sumo.network)
+    valid_tls_id = [i.getID() for i in net.getTrafficLights()]
+    for tls in cfg.tls:
+        assert tls.id in valid_tls_id, \
+        "TLS at node {} does not exist".format(tls.id) 
+
     # Initialize SUMO simulator and prepare arguments
     sumo_bin_name = 'sumo-gui' if cfg.sumo.gui else 'sumo'
     sumo_bin = checkBinary(sumo_bin_name)
@@ -69,9 +76,6 @@ if __name__ == "__main__":
 
     print("Starting simulation with:\n{}".format(" ".join(sumo_command)))
     traci.start(sumo_command)
-
-    # validate nodes
-
 
     # this is build with a bulder design pattern from config
     tls_list = []

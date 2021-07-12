@@ -1,0 +1,13 @@
+# using https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-file-manually
+name: sumotlslab
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pytest
+    pip:
+    - strategoutil
+    - confuse
+    - traci
+    - sumolib
+ 

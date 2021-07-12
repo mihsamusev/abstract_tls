@@ -3,14 +3,14 @@ job:
   dir: examples/block
   
 logging:
-  ids: [B1]
-  data: [state, state]
-  to_file: True
+  ids: [B1, B2]
+  data: [state]
+  to_file: False
   to_console: True
 
 sumo:
   dir: "sumo"
-  gui: True
+  gui: False
   max_steps: 3000
   network: block.net.xml
   additional: []
