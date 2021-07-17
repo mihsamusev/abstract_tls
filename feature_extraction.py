@@ -136,9 +136,9 @@ class TLSDataPipeline:
             self.tls_id)[self.tls_program_id].getPhases())
 
         # validate user data
-        for q in self.query.user_data:
-            origin = q.at
-            for sumo_var, target_var in q.mapping.items():
+        for q in self.query["user_data"]:
+            origin = q["at"]
+            for sumo_var, target_var in q["mapping"].items():
                 # validate origin
                 if origin == "lane":
                     assert sumo_var in lane_ids, \
@@ -161,22 +161,22 @@ class TLSDataPipeline:
 
     def extract(self):
         self.reset_state()
-        for q in self.query.user_data:
-            if q.feature == "count":
-                self.extract_counts(q.at, q.user_class, q.mapping)
-            elif q.feature == "speed":
+        for q in self.query["user_data"]:
+            if q["feature"] == "count":
+                self.extract_counts(q["at"], q["user_class"], q["mapping"])
+            elif q["feature"] == "speed":
                 raise NotImplementedError
-            elif q.feature == "eta":
+            elif q["feature"] == "eta":
                 raise NotImplementedError
-            elif q.feature == "waiting_time":
+            elif q["feature"] == "waiting_time":
                 raise NotImplementedError
 
-        for q in self.query.tls_data:
-            if q.feature == "elapsed_time":
-                add_elapsed(self.state, q.to_variable, self.tls_id)
-            elif q.feature == "integer_phase":
-                add_phase(self.state, q.to_variable, self.tls_id)
-            elif q.feature == "binary_phase":
+        for q in self.query["tls_data"]:
+            if q["feature"] == "elapsed_time":
+                add_elapsed(self.state, q["to_variable"], self.tls_id)
+            elif q["feature"] == "integer_phase":
+                add_phase(self.state, q["to_variable"], self.tls_id)
+            elif q["feature"] == "binary_phase":
                 raise NotImplementedError
            
         return self.state

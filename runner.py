@@ -1,15 +1,13 @@
 import sys
 import argparse
 
-
-from sumolib import checkBinary
 import sumolib
 import traci
 
 
 from tlsagents.base import TLSFactory
 from resultlogger import TLSLogger
-import configparser as cp
+import cfgparse
 
 
 SUMO_GUI_CONFIG = "sumo_gui_config.xml"
@@ -48,7 +46,7 @@ if __name__ == "__main__":
     ap.add_argument("-c", "--config", type=str, required=True,
         help="yaml configuration file defining the simulation")
     args = ap.parse_args()
-    cfg = cp.get_valid_config(args)
+    cfg = cfgparse.get_valid_config(args)
 
     # validate nodes
     net = sumolib.net.readNet(cfg.sumo.network)
@@ -59,7 +57,7 @@ if __name__ == "__main__":
 
     # Initialize SUMO simulator and prepare arguments
     sumo_bin_name = 'sumo-gui' if cfg.sumo.gui else 'sumo'
-    sumo_bin = checkBinary(sumo_bin_name)
+    sumo_bin = sumolib.checkBinary(sumo_bin_name)
     
     sumo_args = {
         "--net-file": cfg.sumo.network,

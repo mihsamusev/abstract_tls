@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="cyclist" vClass="bicycle"/>
+    <vehicle id="c0" type="cyclist" depart="0" departPos="30" departSpeed="2">
+        <route edges="WC CS"/>
+    </vehicle>
+    <vehicle id="c1" type="cyclist" depart="0" departPos="40" departSpeed="3">
+        <route edges="WC CS"/>
+    </vehicle>
+    <vehicle id="c2" type="cyclist" depart="0" departPos="50" departSpeed="0">
+        <route edges="NC CS"/>
+    </vehicle>
+    <vehicle id="c3" type="cyclist" depart="0" departPos="last" departSpeed="0">
+        <route edges="NC CS"/>
+    </vehicle>
+    <vehicle id="c4" type="cyclist" depart="0" departPos="last" departSpeed="0">
+        <route edges="NC CW"/>
+    </vehicle>
+    <vType id="car" vClass="passenger"/>
+    <vehicle id="v0" type="car" depart="0" departPos="25" departSpeed="5" departLane="2">
+      <route edges="NC CW"/>
+    </vehicle>
+    <vehicle id="v1" type="car" depart="0" departPos="25" departSpeed="5" departLane="3">
+      <route edges="NC CS"/>
+    </vehicle>
+    <vehicle id="v2" type="car" depart="0" departPos="25" departSpeed="5" departLane="4">
+      <route edges="NC CE"/>
+    </vehicle>
+    <vehicle id="v3" type="car" depart="0" departPos="50" departSpeed="0" departLane="2">
+      <route edges="WC CN"/>
+    </vehicle>
+    <vehicle id="v4" type="car" depart="0" departPos="50" departSpeed="0" departLane="3">
+      <route edges="WC CE"/>
+    </vehicle>
+    <vehicle id="v5" type="car" depart="0" departPos="50" departSpeed="0" departLane="4">
+      <route edges="WC CS"/>
+    </vehicle>
+</routes>

@@ -76,7 +76,7 @@ tls:
     extract:
       user_data:
         - feature: count
-          user_type: pedestrian
+          user_class: pedestrian
           at: phase
           mapping:
             2: "ped_count"
@@ -125,7 +125,7 @@ tls:
     extract:
       user_data:
         - feature: 'count'
-          user_type: 'pedestrian'
+          user_class: 'pedestrian'
           at: 'phase'
           mapping:
             0: 'p0'
