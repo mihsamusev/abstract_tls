@@ -53,7 +53,10 @@ if __name__ == "__main__":
     valid_tls_id = [i.getID() for i in net.getTrafficLights()]
     for tls in cfg.tls:
         assert tls.id in valid_tls_id, \
-        "TLS at node {} does not exist".format(tls.id) 
+        "@tls: TLS at node {} does not exist".format(tls.id)
+    for tls_id in cfg.logging.ids:  
+        assert tls_id in valid_tls_id, \
+        "@logging: TLS at node {} does not exist".format(tls_id) 
 
     # Initialize SUMO simulator and prepare arguments
     sumo_bin_name = 'sumo-gui' if cfg.sumo.gui else 'sumo'

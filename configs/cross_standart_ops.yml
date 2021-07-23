@@ -1,0 +1,37 @@
+job:
+  name: cross
+  dir: examples/cross
+
+logging:
+  ids: [C]
+  data: [state, variables]
+  to_file: False
+  to_console: True
+
+sumo:
+  dir: "sumo"
+  gui: True
+  max_steps: 3000
+  network: networks/cross6_LFR_exits.net.xml
+  additional: [networks/cross_standart_wt.tll.xml]
+  route: [demands/vehicles.rou.xml, demands/pedestrians.rou.xml, demands/cyclists.rou.xml]
+
+tls:
+  - id: C
+    controller: actuated_two_phase
+    constants:
+      n_movement_phases: 6
+      decision_phases: [0, 3]
+      next_no_ped: [1, 4]
+      next_ped: [2, 5]
+    variables:
+      ped_counts: [0, 0]
+    extract:
+      user_data:
+        - feature: count
+          user_class: pedestrian
+          at: phase
+          mapping:
+            2: [ped_counts, 0]
+            5: [ped_counts, 1]
+        

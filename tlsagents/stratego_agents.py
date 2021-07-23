@@ -109,7 +109,7 @@ class StrategoTLS(TimedTLS):
 			# decide next movement phase
 			next_movement_phase = phase_seq[0]
 			next_duration = durations[0]
-			print("\t\tnext_duration: ", next_duration)
+
 			if next_duration == self.min_green and len(phase_seq) > 1:
 				next_movement_phase = phase_seq[1]
 				next_duration = durations[1]

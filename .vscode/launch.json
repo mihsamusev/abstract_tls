@@ -5,13 +5,14 @@
     "version": "0.2.0",
     "configurations": [
 
+
         {
             "name": "example cross",
             "type": "python",
             "request": "launch",
             "program": "runner.py",
             "console": "internalConsole",
-            "args": ["-c", "configs/example_cross.yml"]
+            "args": ["-c", "configs/cross_standart_ops.yml"]
         },
         {
             "name": "example block",

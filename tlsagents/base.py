@@ -138,10 +138,13 @@ class TimedTLS(TLSAgent):
 	def __init__(self, tls_id, constants=None, variables=None, data_query=None, optimizer=None):
 		super().__init__(tls_id, constants, variables, data_query, optimizer)
 
+	def is_switch_time(self):
+		dt = traci.trafficlight.getNextSwitch(self.tls_id) - traci.simulation.getTime()
+		return int(dt) == 0
+
 	def calculate_next_phase(self):
 		next_phase = self.phase
-		dt = traci.trafficlight.getNextSwitch(self.tls_id) - traci.simulation.getTime()
-		if int(dt) == 0:
+		if self.is_switch_time():
 			next_phase = self.next_phase_id()
 		return next_phase
 
