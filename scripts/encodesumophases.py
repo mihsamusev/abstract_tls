@@ -13,6 +13,8 @@ if __name__ == "__main__":
         "Whether to output decimal instead of binary")
     ap.add_argument("-b", "--base", type=int, default=16, help=
         "base for the binary output")
+    ap.add_argument("-s", "--stratego-format", dest='stratego_format', default=False, action='store_true', help=
+        "Whether to format for insertion to stratego model")
     args = ap.parse_args()
 
     # get xml tree
@@ -24,9 +26,10 @@ if __name__ == "__main__":
         args.number = len(logic_ET)
     
     n_ped = args.pedestrian_lights
-    for elem in logic_ET[:args.number]:
+    for i, elem in enumerate(logic_ET[:args.number]):
         bin_phase = ["1" if e.lower() == "g" else "0" for e in elem.get("state")]
         bin_phase = "".join(bin_phase)
+        
         if n_ped > 0:
             bin_phase = bin_phase[:-n_ped]
 
@@ -37,5 +40,8 @@ if __name__ == "__main__":
         
         if args.decimal:
             out = str(int(out, 2))
+        elif args.stratego_format:
+            sep = "," if i != args.number - 1 else ""
+            out = f"{str(int(out, 2)) + sep: <16}//{i}: {out}"
 
         print(out)
