@@ -24,11 +24,13 @@ class StategoOptimizer(StrategoController):
 		self.objective += self.get_objective(self.states)
 
 	def get_objective(self, states):
+		"""
 		queue = states["A"] + states["B"]
 		objective = 0
 		for elem in queue:
 			objective += elem * elem
-		return objective
+		"""
+		return 0
 
 	def update_state(self, new_values):
 		super().update_state(new_values)
@@ -116,6 +118,68 @@ class StrategoTLS(TimedTLS):
 			
 			# decide if transition is required
 			next_phase = next_movement_phase
+			if self.phase != next_phase:
+				transition_phase = self.transitions.index((self.phase, next_phase))
+				next_phase = self.n_movement_phases + transition_phase
+
+		else:
+			next_phase = super().calculate_next_phase()
+		
+		return next_phase
+
+
+@TLSFactory.register_agent('stratego2')
+class StrategoTLS(TimedTLS):
+	"""
+	Controller class for a pedestrian responsive crosswalk controller
+	"""
+	def __init__(self, tls_id, constants=None, variables=None,
+		data_query=None, optimizer=None):
+		super().__init__(tls_id, constants, variables, data_query, optimizer)
+
+		self.mpc_step = self.constants.get('mpc_step', 5)
+		self.min_green = self.constants.get('min_green', 4)
+		self.uppaal_model_template = self.constants.get('model_template')
+		self.uppaal_query = self.constants.get('verifyta_query', "")
+		self.uppaal_verifyta = self.constants.get('verifyta_command', 'verifyta')
+		self.uppaal_debug = self.constants.get('debug', False)
+		
+		self.n_movement_phases = self.constants.get('n_movement_phases') 
+		self.movement_phase = True 
+		
+		self.transitions = self.get_transitions()
+		self.optimizer = StategoOptimizer(
+            templatefile=self.uppaal_model_template,
+            model_cfg_dict=self.variables)
+
+	
+	def get_transitions(self):
+		"""
+		Calculate transitions from
+		"""
+		transitions = []
+		for p in self.phase_list[self.n_movement_phases:]:
+			i, j = map(int, p.name.strip("( )").split(","))
+			transitions.append((i, j))
+		return transitions
+	
+	def calculate_next_phase(self):
+		self.variables = self.data_pipeline.extract()
+
+		self.movement_phase = self.phase < self.n_movement_phases
+
+		# on k-th step of each movement phase
+		if self.movement_phase and self.elapsed >= self.min_green and self.elapsed % self.mpc_step == 0:
+			self.optimizer.init_simfile()
+			self.optimizer.update_state(self.variables)
+			self.optimizer.insert_state()
+
+			_, phase_seq  = self.optimizer.run(
+			queryfile=self.uppaal_query,
+			verifyta_command=self.uppaal_verifyta)
+			
+			# ecide next movement phase and if transition is required
+			next_phase = phase_seq[0]
 			if self.phase != next_phase:
 				transition_phase = self.transitions.index((self.phase, next_phase))
 				next_phase = self.n_movement_phases + transition_phase

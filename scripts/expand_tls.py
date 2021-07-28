@@ -74,17 +74,17 @@ def pairs(s):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("-t", "--tls-program", required=True, help=
-        "path to *.tll.xml file defining green / red only traffic light program")
+        "Path to *.tll.xml file defining green / red only traffic light program.")
     ap.add_argument("-o", "--output", required=True, help=
-        "path to an output *.tll.xml file with new intermediate yellow phases")
+        "Path to an output *.tll.xml file with new intermediate yellow phases.")
     ap.add_argument("-e", "--exclude-pairs", type=pairs, default=[], nargs="+", help=
-        "list of phase transitions to exclude: from1,to1 from2,to2 ...")
+        "List of phase transitions to exclude: from1,to1 from2,to2 ...")
     ap.add_argument("-i", "--include-pairs", type=pairs, default=[], nargs="+", help=
-        "list of phase transitions to exclude: from1,to1 from2,to2 ...")
+        "List of phase transitions to exclude: from1,to1 from2,to2 ...")
     ap.add_argument("-p", "--pedestrian-lights", type=int, default=4, help=
-        "number of pedestrian light signals in the signal state string")
+        "Number of pedestrian light signals in the signal state string. Default: 4.")
     ap.add_argument("-y", "--yellow-duration", type=int, default=3, help=
-        "duration of a yellow transition phase")
+        "Duration of a yellow transition phase. Default: 3 seconds.")
     args = ap.parse_args()
 
     # get xml tree

@@ -13,25 +13,54 @@ sumo:
   gui: True
   max_steps: 3000
   network: networks/cross6_LFR_exits.net.xml
-  additional: [networks/cross_standart_wt.tll.xml]
+  additional: [tll/cross_standart_left_wt.tll.xml]
   route: [demands/vehicles.rou.xml, demands/pedestrians.rou.xml, demands/cyclists.rou.xml]
 
 tls:
   - id: C
-    controller: actuated_two_phase
+    controller: stratego2
+    
     constants:
-      n_movement_phases: 6
-      decision_phases: [0, 3]
-      next_no_ped: [1, 4]
-      next_ped: [2, 5]
+      mpc_step: 2
+      min_green: 4
+      n_movement_phases: 8
+      model_template: stratego/cross_mpc_template.xml
+      verifyta_query: stratego/cross_mpc.q
+      verifyta_command: verifyta
+    
     variables:
-      ped_counts: [0, 0]
+      waiting: [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0]
+      phase: 0
+    
     extract:
       user_data:
         - feature: count
-          user_class: pedestrian
-          at: phase
+          user_class: passenger
+          at: lane
           mapping:
-            2: [ped_counts, 0]
-            5: [ped_counts, 1]
+            NC_2: [waiting, 2]
+            NC_3: [waiting, 3]
+            NC_4: [waiting, 4]
+            EC_2: [waiting, 7]
+            EC_3: [waiting, 8]
+            EC_4: [waiting, 9]
+            SC_2: [waiting, 12]
+            SC_3: [waiting, 13]
+            SC_4: [waiting, 14]
+            WC_2: [waiting, 17]
+            WC_3: [waiting, 18]
+            WC_4: [waiting, 19]
+
+        - feature: count
+          user_class: bicycle
+          at: lane
+          mapping:
+            NC_1: [waiting, 0]
+            EC_1: [waiting, 5]
+            SC_1: [waiting, 10]
+            WC_1: [waiting, 15]
+
+      tls_data:
+        - feature: integer_phase
+          to_variable: phase
         

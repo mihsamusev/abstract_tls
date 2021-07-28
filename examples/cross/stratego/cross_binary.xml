@@ -343,7 +343,7 @@ x = 0</label>
 	</template>
 	<template>
 		<name>PhaseSelectionGraphBin</name>
-		<declaration>void reset_transition_matrix(phase_id_t next_phase, int requested_phase){
+		<declaration>void reset_transition_matrix(phase_id_t next_phase, int&amp; requested_phase){
     // resets the variable transition matrix to its base
     if (next_phase == requested_phase){    
         transition_exists = _transition_exists;
@@ -384,27 +384,34 @@ reset_transition_matrix(next_phase, requested_phase)</label>
 		<name>BicycleRequest</name>
 		<declaration>
 
-void record_request(int&amp; p) {
+void record_request(int&amp; target) {
 // if phase can serve request it must either do that or extend itself    
-    bool empty[N_PHASES];
-    for(i:phase_id_t){
-        if(transition_exists[i][p])
-        {
-            transition_exists[i] = empty; 
-            transition_exists[i][i] = true;
-            transition_exists[i][p] = true;
+    if(target != -1){
+        for(i:phase_id_t){
+            if(transition_exists[i][target])
+            {
+                for(j:phase_id_t){
+                    if(!transition_exists[j][target] &amp;&amp; j != i &amp;&amp; j != target){
+                        transition_exists[i][j] = false;
+                    }
+                }       
+            }
         }
     }
 }</declaration>
 		<location id="id17" x="0" y="0">
+			<label kind="exponentialrate" x="-10" y="34">1</label>
 		</location>
 		<init ref="id17"/>
 		<transition controllable="false">
 			<source ref="id17"/>
 			<target ref="id17"/>
 			<label kind="select" x="-68" y="110">i: int[0,1]</label>
-			<label kind="guard" x="-68" y="127">t &gt; 10 &amp;&amp; t &lt; 20 &amp;&amp; requested_phase == -1</label>
-			<label kind="assignment" x="-68" y="144">requested_phase = bicycle_phases[i],
+			<label kind="guard" x="-68" y="127">t &gt; 10
+&amp;&amp; t &lt; 20
+&amp;&amp; requested_phase == -1
+&amp;&amp; phase != bicycle_phases[i]</label>
+			<label kind="assignment" x="-68" y="204">requested_phase = bicycle_phases[i],
 record_request(requested_phase)</label>
 			<nail x="102" y="102"/>
 			<nail x="-102" y="102"/>
@@ -479,7 +486,7 @@ waiting[12], waiting[13], waiting[14], waiting[15],
 waiting[16], waiting[17], waiting[18], waiting[19]
 }-&gt;{t, ctrl.x}:&lt;&gt; t&gt;=HORIZON</formula>
 			<comment/>
-			<result outcome="success" type="quality" timestamp="2021-07-26 05:10:26 +0200">
+			<result outcome="success" type="quality" timestamp="2021-07-28 09:56:28 +0200">
 				<option key="--search-order" value="0"/>
 				<option key="--statespace-consumption" value="1"/>
 				<option key="--diagnostic" value="-1"/>
@@ -2161,8 +2168,63 @@ Mean estimate of displayed sample: 55.92 ± 2.362 (95% CI)</comment>
 			<comment/>
 		</query>
 		<query>
-			<formula/>
+			<formula>simulate 1 [&lt;=HORIZON] {requested_phase}</formula>
 			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 09:58:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (1)" xaxis="time" yaxis="value">
+					<series title="requested_phase" type="l" color="0xff0000" encoding="csv">0.0,0.0
+0.0,-1.0
+10.190765271893945,-1.0
+10.190765271893945,0.0
+60.0,0.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
 		</query>
 	</queries>
 </nta>

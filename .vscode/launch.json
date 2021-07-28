@@ -23,6 +23,14 @@
             "args": ["-c", "configs/example_block.yml"]
         },
         {
+            "name": "cross stratego",
+            "type": "python",
+            "request": "launch",
+            "program": "runner.py",
+            "console": "internalConsole",
+            "args": ["-c", "configs/cross_stratego.yml"]
+        },
+        {
             "name": "current",
             "type": "python",
             "request": "launch",

@@ -1,0 +1,1814 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.5//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_5.dtd'>
+<nta>
+	<declaration>//CONSTANTS
+const int N_PHASES = 8; 
+const int N_SIGNALS = 20;
+const int INT32_MAX = 2147483647; // up to 31 signal
+
+const int MIN_GREEN = 4; 
+const int YELLOW = 3;
+const int HORIZON = 60;
+
+//TYPES
+typedef int[0, INT32_MAX] encoded_signal_t;
+typedef int[0, N_SIGNALS-1] signal_t;
+typedef int[0, N_PHASES-1] phase_id_t;
+
+// bit binary patterns
+const encoded_signal_t encoded_phases[phase_id_t] = {
+787200,         //0: 11000-00000-11000-00000
+1016800,        //1: 11111-00000-11111-00000
+984000,         //2: 11110-00000-11110-00000
+32800,          //3: 00001-00000-00001-00000
+24600,          //4: 00000-11000-00000-11000
+31775,          //5: 00000-11111-00000-11111
+30750,          //6: 00000-11110-00000-11110
+1025            //7: 00000-00001-00000-00001
+};
+
+phase_id_t phase = 1;
+phase_id_t next_phase = 0;
+
+broadcast chan select_phase, phase_selected;
+broadcast chan select_next[signal_t];
+
+// ARRAYS
+bool signal[signal_t];
+int waiting[signal_t] = {1, 0, 0, 4, 0, 0, 0, 0, 3, 3, 1, 0, 0, 3, 7, 3, 0, 0, 3, 0}; 
+/*
+{
+     0,  0,  0,  0,
+     0,  0,  0,  0,
+     0,  0,  0,  0,
+     0,  0,  0,  0,
+     0,  0,  0,  0
+};
+*/
+int requested_phase = -1;
+const int N_DIR = 2;
+const int N_CYCLIST_SIGNALS = 4;
+typedef int[0, N_DIR-1] dir_t;
+typedef int[0, N_CYCLIST_SIGNALS-1] cyclist_signal_t;
+
+int cyclist_signals[dir_t][cyclist_signal_t] = {
+    {0, 1, 10, 11},
+    {5, 6, 15, 16}
+};
+const int cyclist_phases[dir_t] = {0, 4};
+
+// binary version of that
+const bool _transition_exists[N_PHASES][N_PHASES] = {
+    {0, 1, 1, 0, 0, 0, 0, 0}, // 0:
+    {0, 1, 0, 1, 1, 1, 1, 0}, // 1:
+    {0, 0, 1, 1, 1, 1, 1, 0}, // 2:
+    {0, 0, 0, 1, 1, 1, 1, 0}, // 3:
+    {0, 0, 0, 0, 0, 1, 1, 0}, // 4:
+    {1, 1, 1, 0, 0, 1, 0, 1}, // 5:
+    {1, 1, 1, 0, 0, 0, 1, 1}, // 6:
+    {1, 1, 1, 0, 0, 0, 0, 1}  // 7:
+};
+bool transition_exists[N_PHASES][N_PHASES] = _transition_exists;
+
+clock t;
+hybrid clock C;
+int total_waiting;
+</declaration>
+	<template>
+		<name>Serving</name>
+		<declaration>void serve_users(int&amp; users[signal_t]) {     
+        for (i:signal_t)    {
+            if (signal[i]) {   
+                (users[i] - 1 &lt; 0) ? 0 : users[i]--;
+            }
+    }
+}</declaration>
+		<location id="id0" x="0" y="0">
+			<label kind="exponentialrate" x="0" y="17">1</label>
+		</location>
+		<init ref="id0"/>
+		<transition controllable="false">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="-68" y="76">serve_users(waiting),
+total_waiting = sum(i:signal_t)(waiting[i])</label>
+			<nail x="-68" y="68"/>
+			<nail x="68" y="68"/>
+		</transition>
+	</template>
+	<template>
+		<name>ServingSecondly</name>
+		<declaration>clock x;
+
+void serve_users(int&amp; users[signal_t]) {     
+        for (i:signal_t)    {
+            if (signal[i]) {   
+                (users[i] - 1 &lt; 0) ? 0 : users[i]--;
+            }
+    }
+}</declaration>
+		<location id="id1" x="0" y="0">
+			<label kind="invariant" x="-17" y="-34">x &lt;= 1</label>
+		</location>
+		<init ref="id1"/>
+		<transition controllable="false">
+			<source ref="id1"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-68" y="85">x == 1</label>
+			<label kind="assignment" x="-68" y="102">serve_users(waiting),
+total_waiting = sum(i:signal_t)(waiting[i]),
+x=0</label>
+			<nail x="-68" y="68"/>
+			<nail x="68" y="68"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Controller</name>
+		<declaration>// Variables
+
+clock x;
+
+
+// Functions
+
+void record_request(int&amp; target) {
+// if phase can serve request it must either do that or extend itself    
+    if(target != -1){
+        for(i:phase_id_t){
+            if(transition_exists[i][target])
+            {
+                for(j:phase_id_t){
+                    if(!transition_exists[j][target] &amp;&amp; j != i &amp;&amp; j != target){
+                        transition_exists[i][j] = false;
+                    }
+                }       
+            }
+        }
+    }
+}
+
+void activate_signals(phase_id_t phase) {
+   // Activate associated signals of encoded phase
+   // Checks whether bits of s by i units is one
+  encoded_signal_t s = encoded_phases[phase];  
+  for (i:signal_t){
+      signal[N_SIGNALS - 1 - i] = (s &gt;&gt; i) &amp; 1;
+  }
+}
+
+void activate_transition_to(phase_id_t phase_to){
+  encoded_signal_t s = encoded_phases[phase_to];
+  bool phase_to_signal = false;
+    for (i:signal_t){
+      phase_to_signal = (s &gt;&gt; i) &amp; 1;
+      signal[N_SIGNALS - 1 - i] = signal[N_SIGNALS - 1 - i] &amp; phase_to_signal;
+  }
+}
+
+void handle_bicycle_request(){
+    int cyclist_signal;
+    for(i:dir_t){
+        for(j:cyclist_signal_t){
+            cyclist_signal = cyclist_signals[i][j];
+            if(waiting[cyclist_signal] &gt; 0 &amp;&amp; requested_phase != cyclist_phases[i] &amp;&amp; phase != cyclist_phases[i]){
+                requested_phase = cyclist_phases[i];
+                record_request(requested_phase);
+            }
+        }
+    }
+}
+
+void initialize(){
+    activate_signals(phase);
+    //handle_bicycle_request();
+}
+
+</declaration>
+		<location id="id2" x="-272" y="-374">
+			<name x="-425" y="-391">DecideNextPhase</name>
+			<committed/>
+		</location>
+		<location id="id3" x="-170" y="34">
+			<name x="-187" y="51">OperatePhase</name>
+			<label kind="invariant" x="-187" y="68">x &lt;= MIN_GREEN</label>
+		</location>
+		<location id="id4" x="-170" y="-136">
+			<name x="-306" y="-144">ActivatePhase</name>
+			<label kind="invariant" x="-306" y="-127">x&lt;=YELLOW</label>
+		</location>
+		<location id="id5" x="-272" y="-501">
+			<name x="-282" y="-535">Init</name>
+			<committed/>
+		</location>
+		<location id="id6" x="-272" y="-246">
+			<name x="-408" y="-263">SwitchOrExtend</name>
+			<committed/>
+		</location>
+		<location id="id7" x="-272" y="-306">
+			<committed/>
+		</location>
+		<init ref="id5"/>
+		<transition>
+			<source ref="id7"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-246" y="-289">phase_selected?</label>
+		</transition>
+		<transition controllable="false">
+			<source ref="id6"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-544" y="-221">next_phase == phase</label>
+			<nail x="-374" y="-136"/>
+			<nail x="-374" y="34"/>
+		</transition>
+		<transition controllable="false">
+			<source ref="id6"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-178" y="-221">next_phase != phase</label>
+			<label kind="assignment" x="-178" y="-204">phase = next_phase,
+activate_transition_to(phase)</label>
+		</transition>
+		<transition controllable="false">
+			<source ref="id5"/>
+			<target ref="id2"/>
+			<label kind="assignment" x="-238" y="-450">initialize()</label>
+		</transition>
+		<transition controllable="false">
+			<source ref="id4"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-161" y="-93">x == YELLOW</label>
+			<label kind="assignment" x="-161" y="-76">activate_signals(phase),
+x = 0</label>
+		</transition>
+		<transition controllable="false">
+			<source ref="id3"/>
+			<target ref="id2"/>
+			<label kind="guard" x="144" y="-204">x == MIN_GREEN</label>
+			<label kind="assignment" x="144" y="-187">x = 0</label>
+			<nail x="136" y="34"/>
+			<nail x="136" y="-374"/>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-246" y="-348">select_phase!</label>
+		</transition>
+	</template>
+	<template>
+		<name>PhaseSelectionAny</name>
+		<location id="id8" x="0" y="0">
+			<committed/>
+		</location>
+		<location id="id9" x="-136" y="0">
+		</location>
+		<init ref="id9"/>
+		<transition>
+			<source ref="id9"/>
+			<target ref="id8"/>
+			<label kind="synchronisation" x="-119" y="-34">select_phase?</label>
+		</transition>
+		<transition>
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="select" x="-119" y="85">p: phase_id_t</label>
+			<label kind="synchronisation" x="-119" y="119">phase_selected!</label>
+			<label kind="assignment" x="-119" y="102">next_phase = p</label>
+			<nail x="0" y="68"/>
+			<nail x="-136" y="68"/>
+			<nail x="-136" y="17"/>
+		</transition>
+	</template>
+	<template>
+		<name>PhaseSelectionGraph</name>
+		<declaration>void reset_transition_matrix(phase_id_t next_phase, int&amp; requested_phase){
+    // resets the variable transition matrix to its base
+    if (next_phase == requested_phase){    
+        transition_exists = _transition_exists;
+        requested_phase = -1;
+    }
+}</declaration>
+		<location id="id10" x="68" y="-170">
+			<committed/>
+		</location>
+		<location id="id11" x="-204" y="-170">
+		</location>
+		<init ref="id11"/>
+		<transition>
+			<source ref="id11"/>
+			<target ref="id10"/>
+			<label kind="synchronisation" x="-161" y="-195">select_phase?</label>
+		</transition>
+		<transition>
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="select" x="-161" y="-136">p: phase_id_t</label>
+			<label kind="guard" x="-161" y="-119">transition_exists[phase][p]</label>
+			<label kind="synchronisation" x="-161" y="-68">phase_selected!</label>
+			<label kind="assignment" x="-161" y="-102">next_phase = p,
+reset_transition_matrix(next_phase, requested_phase)</label>
+			<nail x="68" y="-42"/>
+			<nail x="-204" y="-42"/>
+		</transition>
+	</template>
+	<template>
+		<name>Cost</name>
+		<location id="id12" x="0" y="0">
+			<label kind="invariant" x="-10" y="17">C'==sum(i:signal_t)(waiting[i])</label>
+		</location>
+		<init ref="id12"/>
+	</template>
+	<template>
+		<name>BicycleRequest</name>
+		<declaration>
+
+void record_request(int&amp; target) {
+// if phase can serve request it must either do that or extend itself    
+    if(target != -1){
+        for(i:phase_id_t){
+            if(transition_exists[i][target])
+            {
+                for(j:phase_id_t){
+                    if(!transition_exists[j][target] &amp;&amp; j != i &amp;&amp; j != target){
+                        transition_exists[i][j] = false;
+                    }
+                }       
+            }
+        }
+    }
+}</declaration>
+		<location id="id13" x="0" y="0">
+			<label kind="exponentialrate" x="-10" y="34">1</label>
+		</location>
+		<init ref="id13"/>
+		<transition controllable="false">
+			<source ref="id13"/>
+			<target ref="id13"/>
+			<label kind="select" x="-68" y="110">i: int[0,1]</label>
+			<label kind="guard" x="-68" y="127">t &gt; 10
+&amp;&amp; t &lt; 20
+&amp;&amp; requested_phase == -1
+&amp;&amp; phase != cyclist_phases[i]</label>
+			<label kind="assignment" x="-68" y="204">requested_phase = cyclist_phases[i],
+record_request(requested_phase)</label>
+			<nail x="102" y="102"/>
+			<nail x="-102" y="102"/>
+		</transition>
+	</template>
+	<system>ctrl = Controller();
+serving = Serving();
+pm = PhaseSelectionGraph();
+c = Cost();
+b = BicycleRequest();
+system ctrl, serving, pm, c;
+    </system>
+	<queries>
+		<query>
+			<formula>strategy opt = minE (total_waiting) [&lt;=HORIZON]:&lt;&gt; t&gt;=HORIZON</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-26 10:10:26 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+			</result>
+		</query>
+		<query>
+			<formula>strategy opt = minE (C) [&lt;=HORIZON]{
+next_phase, phase, 
+waiting[0], waiting[1], waiting[2], waiting[3],
+waiting[4], waiting[5], waiting[6], waiting[7],
+waiting[8], waiting[9], waiting[10], waiting[11],
+waiting[12], waiting[13], waiting[14], waiting[15],
+waiting[16], waiting[17], waiting[18], waiting[19]
+}-&gt;{t, ctrl.x}:&lt;&gt; t&gt;=HORIZON</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:47:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>simulate 10 [&lt;=HORIZON] {total_waiting}</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:47:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (10)" xaxis="time" yaxis="value">
+					<series title="total_waiting" type="l" color="0xff0000" encoding="csv">0.0,0.0
+1.7799044856084807,0.0
+1.7799044856084807,9.0
+2.6961648675489194,9.0
+2.6961648675489194,8.0
+3.9778536890082052,8.0
+3.9778536890082052,7.0
+31.66931219928898,7.0
+31.66931219928898,6.0
+34.49851719338,6.0
+34.49851719338,5.0
+36.108918796008155,5.0
+36.108918796008155,4.0
+36.860329735893906,4.0
+36.860329735893906,3.0
+37.13941944372327,3.0
+37.13941944372327,2.0
+37.22976867668799,2.0
+37.22976867668799,1.0
+37.591718869497065,1.0
+37.591718869497065,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff0909" encoding="csv">0.0,0.0
+0.3345514337062966,0.0
+0.3345514337062966,9.0
+1.8264928551940858,9.0
+1.8264928551940858,8.0
+2.306193007817358,8.0
+2.306193007817358,7.0
+2.8844174130832343,7.0
+2.8844174130832343,6.0
+5.016385880815198,6.0
+5.016385880815198,5.0
+5.538059611267013,5.0
+5.538059611267013,4.0
+5.766492111886524,4.0
+5.766492111886524,3.0
+17.733667724905942,3.0
+17.733667724905942,2.0
+17.955427641295945,2.0
+17.955427641295945,1.0
+19.15090066106123,1.0
+19.15090066106123,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff1212" encoding="csv">0.0,0.0
+0.35945879933129116,0.0
+0.35945879933129116,9.0
+1.424269009332387,9.0
+1.424269009332387,8.0
+1.63572314605676,8.0
+1.63572314605676,7.0
+3.0440862688179826,7.0
+3.0440862688179826,6.0
+4.742820802536427,6.0
+4.742820802536427,5.0
+4.888699489000364,5.0
+4.888699489000364,4.0
+26.304537820746884,4.0
+26.304537820746884,3.0
+26.743232864294566,3.0
+26.743232864294566,2.0
+28.651800784376675,2.0
+28.651800784376675,1.0
+44.802348178851744,1.0
+44.802348178851744,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff1b1b" encoding="csv">0.0,0.0
+3.6488451841619964,0.0
+3.6488451841619964,9.0
+4.606312410178943,9.0
+4.606312410178943,8.0
+5.307145835701059,8.0
+5.307145835701059,7.0
+5.594571193435675,7.0
+5.594571193435675,6.0
+31.588604602037368,6.0
+31.588604602037368,5.0
+32.61608291499143,5.0
+32.61608291499143,4.0
+32.84904211495105,4.0
+32.84904211495105,3.0
+33.53955874868166,3.0
+33.53955874868166,2.0
+33.93200159087774,2.0
+33.93200159087774,1.0
+36.0000485837685,1.0
+36.0000485837685,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff2424" encoding="csv">0.0,0.0
+1.909626397607378,0.0
+1.909626397607378,9.0
+2.0169306665877893,9.0
+2.0169306665877893,8.0
+3.3089251248842597,8.0
+3.3089251248842597,7.0
+4.960199659391853,7.0
+4.960199659391853,6.0
+5.152060803942955,6.0
+5.152060803942955,5.0
+6.092453718684024,5.0
+6.092453718684024,4.0
+6.2214076734528225,4.0
+6.2214076734528225,3.0
+7.680511923972711,3.0
+7.680511923972711,2.0
+8.523463283173626,2.0
+8.523463283173626,1.0
+10.3321828308604,1.0
+10.3321828308604,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff2d2d" encoding="csv">0.0,0.0
+1.5225951845629426,0.0
+1.5225951845629426,9.0
+3.270835215716801,9.0
+3.270835215716801,8.0
+3.7400116079043135,8.0
+3.7400116079043135,7.0
+3.772714784622983,7.0
+3.772714784622983,6.0
+4.404234576072306,6.0
+4.404234576072306,5.0
+6.448965110243179,5.0
+6.448965110243179,4.0
+24.29121928414098,4.0
+24.29121928414098,3.0
+24.896946133823462,3.0
+24.896946133823462,2.0
+27.350462695747225,2.0
+27.350462695747225,1.0
+27.601570137602078,1.0
+27.601570137602078,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff3636" encoding="csv">0.0,0.0
+0.44731707542667837,0.0
+0.44731707542667837,9.0
+1.6059543750032759,9.0
+1.6059543750032759,8.0
+3.2886025522624083,8.0
+3.2886025522624083,7.0
+6.197091139032807,7.0
+6.197091139032807,6.0
+6.63461503302312,6.0
+6.63461503302312,5.0
+7.2649784977199525,5.0
+7.2649784977199525,4.0
+8.050273058640167,4.0
+8.050273058640167,3.0
+10.444813382716507,3.0
+10.444813382716507,2.0
+28.27410937105882,2.0
+28.27410937105882,1.0
+29.777013450904647,1.0
+29.777013450904647,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff3e3e" encoding="csv">0.0,0.0
+2.0016418002065204,0.0
+2.0016418002065204,9.0
+4.228342989330238,9.0
+4.228342989330238,8.0
+5.642593489414108,8.0
+5.642593489414108,7.0
+5.946633739131001,7.0
+5.946633739131001,6.0
+17.64763768175851,6.0
+17.64763768175851,5.0
+17.82960362593897,5.0
+17.82960362593897,4.0
+18.99576660619671,4.0
+18.99576660619671,3.0
+19.404299282832614,3.0
+19.404299282832614,2.0
+19.7093038296824,2.0
+19.7093038296824,1.0
+20.514829490166136,1.0
+20.514829490166136,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff4747" encoding="csv">0.0,0.0
+0.31995749203515894,0.0
+0.31995749203515894,9.0
+0.5921846078477587,9.0
+0.5921846078477587,8.0
+1.178431488749165,8.0
+1.178431488749165,7.0
+1.7682135969845052,7.0
+1.7682135969845052,6.0
+1.8260032560582642,6.0
+1.8260032560582642,5.0
+2.3437389572044056,5.0
+2.3437389572044056,4.0
+5.015329346559118,4.0
+5.015329346559118,3.0
+5.326841698373865,3.0
+5.326841698373865,2.0
+5.598407764105389,2.0
+5.598407764105389,1.0
+25.580341309107567,1.0
+25.580341309107567,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff5050" encoding="csv">0.0,0.0
+0.2887395198802264,0.0
+0.2887395198802264,9.0
+0.9006676374817522,9.0
+0.9006676374817522,8.0
+1.357099260858651,8.0
+1.357099260858651,7.0
+1.6658402239312113,7.0
+1.6658402239312113,6.0
+2.168872925772834,6.0
+2.168872925772834,5.0
+3.114138612292963,5.0
+3.114138612292963,4.0
+3.5114345952319104,4.0
+3.5114345952319104,3.0
+3.5665588624162794,3.0
+3.5665588624162794,2.0
+3.880503460531286,2.0
+3.880503460531286,1.0
+4.5182561149106855,1.0
+4.5182561149106855,0.0
+60.000002,0.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula>simulate 10 [&lt;=HORIZON] {total_waiting} under opt</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:47:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (10)" xaxis="time" yaxis="value">
+					<series title="total_waiting" type="l" color="0xff0000" encoding="csv">0.0,0.0
+0.28303590622543545,0.0
+0.28303590622543545,9.0
+0.9202452234927805,9.0
+0.9202452234927805,8.0
+4.58594251731331,8.0
+4.58594251731331,7.0
+5.687219405612773,7.0
+5.687219405612773,6.0
+5.974886098122902,6.0
+5.974886098122902,5.0
+6.223123925577433,5.0
+6.223123925577433,4.0
+7.589704137633234,4.0
+7.589704137633234,3.0
+7.952708470715241,3.0
+7.952708470715241,2.0
+8.556154954567377,2.0
+8.556154954567377,1.0
+9.110372890350265,1.0
+9.110372890350265,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff0909" encoding="csv">0.0,0.0
+0.8647522116357684,0.0
+0.8647522116357684,9.0
+2.0557823168459817,9.0
+2.0557823168459817,8.0
+2.247266061257391,8.0
+2.247266061257391,7.0
+4.23528798747703,7.0
+4.23528798747703,6.0
+4.542703752167573,6.0
+4.542703752167573,5.0
+4.921194726958452,5.0
+4.921194726958452,4.0
+4.973282695834205,4.0
+4.973282695834205,3.0
+6.425375981240737,3.0
+6.425375981240737,2.0
+7.046051261405628,2.0
+7.046051261405628,1.0
+8.04846480627599,1.0
+8.04846480627599,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff1212" encoding="csv">0.0,0.0
+0.5908972099541228,0.0
+0.5908972099541228,9.0
+0.6215135632252082,9.0
+0.6215135632252082,8.0
+2.118595714087759,8.0
+2.118595714087759,7.0
+2.49984574780311,7.0
+2.49984574780311,6.0
+3.214973275579722,6.0
+3.214973275579722,5.0
+3.552684788475479,5.0
+3.552684788475479,4.0
+4.057412164965753,4.0
+4.057412164965753,3.0
+4.239625450048487,3.0
+4.239625450048487,2.0
+6.139899875662612,2.0
+6.139899875662612,1.0
+6.421821663548034,1.0
+6.421821663548034,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff1b1b" encoding="csv">0.0,0.0
+0.9091045838191775,0.0
+0.9091045838191775,9.0
+1.1660792527649726,9.0
+1.1660792527649726,8.0
+1.3234537900360281,8.0
+1.3234537900360281,7.0
+1.8464649813370015,7.0
+1.8464649813370015,6.0
+2.0043680522653444,6.0
+2.0043680522653444,5.0
+3.2366013845025137,5.0
+3.2366013845025137,4.0
+3.8034377219084132,4.0
+3.8034377219084132,3.0
+7.148847076715603,3.0
+7.148847076715603,2.0
+8.90066255984678,2.0
+8.90066255984678,1.0
+9.207860152236362,1.0
+9.207860152236362,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff2424" encoding="csv">0.0,0.0
+0.9127134915088431,0.0
+0.9127134915088431,9.0
+1.7883549004285926,9.0
+1.7883549004285926,8.0
+1.9516580359470028,8.0
+1.9516580359470028,7.0
+2.7397478680282012,7.0
+2.7397478680282012,6.0
+4.205861256701672,6.0
+4.205861256701672,5.0
+4.743000301413398,5.0
+4.743000301413398,4.0
+5.604155387164622,4.0
+5.604155387164622,3.0
+6.0040169265756616,3.0
+6.0040169265756616,2.0
+6.268056442616577,2.0
+6.268056442616577,1.0
+7.146892646452761,1.0
+7.146892646452761,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff2d2d" encoding="csv">0.0,0.0
+9.165662406889684E-4,0.0
+9.165662406889684E-4,9.0
+1.0606607791899154,9.0
+1.0606607791899154,8.0
+1.1104779219717549,8.0
+1.1104779219717549,7.0
+2.031937422025562,7.0
+2.031937422025562,6.0
+2.963705430427416,6.0
+2.963705430427416,5.0
+3.041820634243996,5.0
+3.041820634243996,4.0
+5.723957205899103,4.0
+5.723957205899103,3.0
+7.599207073045143,3.0
+7.599207073045143,2.0
+8.621979932951094,2.0
+8.621979932951094,1.0
+8.743225557226518,1.0
+8.743225557226518,0.0
+60.0,0.0
+
+					</series>
+					<series title="" type="l" color="0xff3636" encoding="csv">0.0,0.0
+3.512308733559487,0.0
+3.512308733559487,9.0
+3.747501976579228,9.0
+3.747501976579228,8.0
+4.11073346788947,8.0
+4.11073346788947,7.0
+5.6315669367216366,7.0
+5.6315669367216366,6.0
+6.154110977857715,6.0
+6.154110977857715,5.0
+6.822657954809238,5.0
+6.822657954809238,4.0
+7.578699729666573,4.0
+7.578699729666573,3.0
+8.31376397202023,3.0
+8.31376397202023,2.0
+9.900509905081133,2.0
+9.900509905081133,1.0
+9.932780683982394,1.0
+9.932780683982394,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff3e3e" encoding="csv">0.0,0.0
+0.1093392835554521,0.0
+0.1093392835554521,9.0
+0.7018151255273367,9.0
+0.7165752505793083,8.0
+0.7165752505793083,7.0
+1.2148038298052881,7.0
+1.2148038298052881,6.0
+1.4376824171532008,6.0
+1.4376824171532008,5.0
+2.280017988319804,5.0
+2.280017988319804,4.0
+3.4760204953243763,4.0
+3.4760204953243763,3.0
+6.848206367003356,3.0
+6.848206367003356,2.0
+8.343851259888186,2.0
+8.343851259888186,1.0
+9.501223810351213,1.0
+9.501223810351213,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff4747" encoding="csv">0.0,0.0
+1.189140230996277,0.0
+1.189140230996277,9.0
+1.2107784690483605,9.0
+1.2107784690483605,8.0
+1.3329787326548628,8.0
+1.3329787326548628,7.0
+2.5998822302734768,7.0
+2.5998822302734768,6.0
+3.888600170338996,6.0
+3.888600170338996,5.0
+4.021910195376714,5.0
+4.021910195376714,4.0
+5.050912094914677,4.0
+5.050912094914677,3.0
+6.082923394494166,3.0
+6.082923394494166,2.0
+6.8921461106576825,2.0
+6.8921461106576825,1.0
+7.740657602850945,1.0
+7.740657602850945,0.0
+60.000002,0.0
+
+					</series>
+					<series title="" type="l" color="0xff5050" encoding="csv">0.0,0.0
+1.7145494307560374,0.0
+1.7145494307560374,9.0
+1.84343704264119,9.0
+1.84343704264119,8.0
+2.1897721832207226,8.0
+2.1897721832207226,7.0
+2.5900275648381923,7.0
+2.5900275648381923,6.0
+3.451159726872568,6.0
+3.451159726872568,5.0
+4.511625854239052,5.0
+4.511625854239052,4.0
+5.31120216102355,4.0
+5.31120216102355,3.0
+8.948188606464944,3.0
+8.948188606464944,2.0
+10.067114464876319,2.0
+10.067114464876319,1.0
+10.0884487282684,1.0
+10.0884487282684,0.0
+60.000002,0.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>simulate 1 [&lt;=HORIZON] {phase}</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:47:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (1)" xaxis="time" yaxis="value">
+					<series title="phase" type="l" color="0xff0000" encoding="csv">0.0,0.0
+0.0,2.0
+7.0,2.0
+7.0,6.0
+14.0,6.0
+14.0,0.0
+21.0,0.0
+21.0,1.0
+28.0,1.0
+28.0,5.0
+39.0,5.0
+39.0,7.0
+54.0,7.0
+54.0,1.0
+60.0,1.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula>simulate 1 [&lt;=HORIZON] {phase} under opt</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:48:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (1)" xaxis="time" yaxis="value">
+					<series title="phase" type="l" color="0xff0000" encoding="csv">0.0,0.0
+0.0,1.0
+19.0,1.0
+19.0,3.0
+26.0,3.0
+26.0,5.0
+37.0,5.0
+37.0,1.0
+44.0,1.0
+44.0,5.0
+55.0,5.0
+55.0,7.0
+60.0,7.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>E[&lt;=HORIZON; 500] (max: C)</formula>
+			<comment/>
+			<result outcome="success" type="quantity" value="116.058 ± 6.80732 (95% CI)" timestamp="2021-07-28 10:01:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Probability Density Distribution" xaxis="max: C" yaxis="probability density">
+					<series title="density" type="b(16.575763)" color="0x0000ff" encoding="csv">16.34679732164441,0.0048263336023057655
+32.92256022734663,0.008687389932533303
+49.49832311172197,0.006394871503391011
+66.07408600093521,0.0054296106923091515
+82.64984888531056,0.004464358854029838
+99.2256117696859,0.0059122547411205656
+115.80137466269814,0.004343699163513517
+132.37713755916192,0.0033784339702508156
+148.95290045658817,0.003257764669715328
+165.5286633394439,0.003257764669715328
+182.10442622229965,0.002051198410893028
+198.6801891197259,0.001327248914341176
+215.25595200258164,0.0018098687826246013
+231.8317148986331,0.0012065916926212168
+248.40747778900501,8.4461425367538E-4
+264.98324068643126,3.6197581432912703E-4
+281.559003569287,4.8263883273197606E-4
+298.13476645214274,7.239512352725311E-4
+314.71052934956896,3.6197581432912703E-4
+331.2862922310499,2.4132575752394355E-4
+347.86205513599236,3.6197581432912703E-4
+364.4378180188481,3.6197581432912703E-4
+381.0135809017038,2.4132575752394355E-4
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">116.058086371203,0.0
+116.058086371203,0.008687389932533303
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=16.576, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [16.35, 397.6]
+Mean estimate of displayed sample: 116.1 ± 6.807 (95% CI)</comment>
+				</plot>
+				<plot title="Probability Distribution" xaxis="max: C" yaxis="probability">
+					<series title="probability" type="b(16.575763)" color="0x0000ff" encoding="csv">16.34679732164441,0.08
+32.92256022734663,0.14400000000000002
+49.49832311172197,0.10600000000000001
+66.07408600093521,0.09
+82.64984888531056,0.07400000000000001
+99.2256117696859,0.098
+115.80137466269814,0.07200000000000001
+132.37713755916192,0.056
+148.95290045658817,0.054000000000000006
+165.5286633394439,0.054000000000000006
+182.10442622229965,0.034
+198.6801891197259,0.022
+215.25595200258164,0.03
+231.8317148986331,0.02
+248.40747778900501,0.014
+264.98324068643126,0.006
+281.559003569287,0.008
+298.13476645214274,0.012
+314.71052934956896,0.006
+331.2862922310499,0.004
+347.86205513599236,0.006
+364.4378180188481,0.006
+381.0135809017038,0.004
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">116.058086371203,0.0
+116.058086371203,0.14400000000000002
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=16.576, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [16.35, 397.6]
+Mean estimate of displayed sample: 116.1 ± 6.807 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Distribution" xaxis="max: C" yaxis="probability">
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">16.34679732164441,0.0
+32.92256022734663,0.08
+49.49832311172197,0.224
+66.07408600093521,0.32999999999999996
+82.64984888531056,0.42000000000000004
+99.2256117696859,0.494
+115.80137466269814,0.592
+132.37713755916192,0.6639999999999999
+148.95290045658817,0.72
+165.5286633394439,0.774
+182.10442622229965,0.8280000000000001
+198.6801891197259,0.8620000000000001
+215.25595200258164,0.884
+231.8317148986331,0.914
+248.40747778900501,0.934
+264.98324068643126,0.9480000000000001
+281.559003569287,0.9540000000000001
+298.13476645214274,0.962
+314.71052934956896,0.974
+331.2862922310499,0.98
+347.86205513599236,0.984
+364.4378180188481,0.99
+381.0135809017038,0.996
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">116.058086371203,0.0
+116.058086371203,1.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=16.576, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [16.35, 397.6]
+Mean estimate of displayed sample: 116.1 ± 6.807 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Confidence Intervals" xaxis="max: C" yaxis="probability">
+					<series title="upper limit" type="k" color="0x0000dd" encoding="csv">16.34679732164441,0.0073506244708472545
+32.92256022734663,0.10734548105072657
+49.49832311172197,0.2631206924447982
+66.07408600093521,0.37312914978265066
+82.64984888531056,0.4646284154239394
+99.2256117696859,0.5387469741344144
+115.80137466269814,0.6354227804047491
+132.37713755916192,0.7053257016154169
+148.95290045658817,0.7589550975945373
+165.5286633394439,0.8099477388450771
+182.10442622229965,0.8600570722725784
+198.6801891197259,0.8910161616603128
+215.25595200258164,0.9107280579280105
+231.8317148986331,0.9370632419155451
+248.40747778900501,0.9541366472303707
+264.98324068643126,0.9657543096464525
+281.559003569287,0.9706198504128016
+298.13476645214274,0.9769692550860906
+314.71052934956896,0.9860850834558177
+331.2862922310499,0.990368590464172
+347.86205513599236,0.9930676842395814
+364.4378180188481,0.9967453144383572
+381.0135809017038,0.9995152251301065
+
+					</series>
+					<series title="upper limit" type="k" color="0xdd0000" encoding="csv">16.34679732164441,0.0
+32.92256022734663,0.057766131946296526
+49.49832311172197,0.18817921186833175
+66.07408600093521,0.2888955972875937
+82.64984888531056,0.3763231099777151
+99.2256117696859,0.44932438551259707
+115.80137466269814,0.5474829612515018
+132.37713755916192,0.6207213277497329
+148.95290045658817,0.6784209417689735
+165.5286633394439,0.7347766507339698
+182.10442622229965,0.7920074994908761
+198.6801891197259,0.8286253438665059
+215.25595200258164,0.8526342618497955
+231.8317148986331,0.8859063529373887
+248.40747778900501,0.9085571063329212
+264.98324068643126,0.9247336493183459
+281.559003569287,0.9317745882491429
+298.13476645214274,0.9412927367512676
+314.71052934956896,0.9559495669490934
+331.2862922310499,0.9635276242152732
+347.86205513599236,0.9687180116055211
+364.4378180188481,0.9768186365989997
+381.0135809017038,0.9856259227591793
+
+					</series>
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">16.34679732164441,0.0
+32.92256022734663,0.08
+49.49832311172197,0.224
+66.07408600093521,0.32999999999999996
+82.64984888531056,0.42000000000000004
+99.2256117696859,0.494
+115.80137466269814,0.592
+132.37713755916192,0.6639999999999999
+148.95290045658817,0.72
+165.5286633394439,0.774
+182.10442622229965,0.8280000000000001
+198.6801891197259,0.8620000000000001
+215.25595200258164,0.884
+231.8317148986331,0.914
+248.40747778900501,0.934
+264.98324068643126,0.9480000000000001
+281.559003569287,0.9540000000000001
+298.13476645214274,0.962
+314.71052934956896,0.974
+331.2862922310499,0.98
+347.86205513599236,0.984
+364.4378180188481,0.99
+381.0135809017038,0.996
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">116.058086371203,0.0
+116.058086371203,1.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=16.576, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [16.35, 397.6]
+Mean estimate of displayed sample: 116.1 ± 6.807 (95% CI)</comment>
+				</plot>
+				<plot title="Frequency Histogram" xaxis="max: C" yaxis="count">
+					<series title="count" type="b(16.575763)" color="0x0000ff" encoding="csv">16.34679732164441,40.0
+32.92256022734663,72.0
+49.49832311172197,53.0
+66.07408600093521,45.0
+82.64984888531056,37.0
+99.2256117696859,49.0
+115.80137466269814,36.0
+132.37713755916192,28.0
+148.95290045658817,27.0
+165.5286633394439,27.0
+182.10442622229965,17.0
+198.6801891197259,11.0
+215.25595200258164,15.0
+231.8317148986331,10.0
+248.40747778900501,7.0
+264.98324068643126,3.0
+281.559003569287,4.0
+298.13476645214274,6.0
+314.71052934956896,3.0
+331.2862922310499,2.0
+347.86205513599236,3.0
+364.4378180188481,3.0
+381.0135809017038,2.0
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">116.058086371203,0.0
+116.058086371203,72.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=16.576, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [16.35, 397.6]
+Mean estimate of displayed sample: 116.1 ± 6.807 (95% CI)</comment>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula>E[&lt;=HORIZON; 500] (max: C) under opt</formula>
+			<comment/>
+			<result outcome="success" type="quantity" value="56.0397 ± 2.10159 (95% CI)" timestamp="2021-07-28 10:01:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Probability Density Distribution" xaxis="max: C" yaxis="probability density">
+					<series title="density" type="b(15.237207)" color="0x0000ff" encoding="csv">14.770116136137139,0.004594040451606823
+30.007323527366427,0.017588547838476746
+45.2445309414422,0.02021371060094538
+60.48173833730673,0.01312577706420738
+75.71894574310653,0.006431650357317863
+90.95615314185198,0.0024939035111399954
+106.19336053791919,7.875576603229835E-4
+121.43056794047712,2.6253684250918184E-4
+136.6677753501389,0.0
+151.90498275365928,0.0
+167.14219015012534,0.0
+182.37939756587897,0.0
+197.6166049548289,0.0
+212.85381236586545,0.0
+228.0910197609567,0.0
+243.32822717056897,0.0
+258.565434567035,0.0
+273.8026419780716,0.0
+289.0398493656467,0.0
+304.2770567827751,0.0
+319.5142641792412,0.0
+334.7514715813868,0.0
+349.98867898394474,1.3126900466999225E-4
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">56.039694423886566,0.0
+56.039694423886566,0.02021371060094538
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=15.237, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [14.77, 365.2]
+Mean estimate of displayed sample: 56.04 ± 2.102 (95% CI)</comment>
+				</plot>
+				<plot title="Probability Distribution" xaxis="max: C" yaxis="probability">
+					<series title="probability" type="b(15.237207)" color="0x0000ff" encoding="csv">14.770116136137139,0.07
+30.007323527366427,0.268
+45.2445309414422,0.308
+60.48173833730673,0.2
+75.71894574310653,0.098
+90.95615314185198,0.038
+106.19336053791919,0.012
+121.43056794047712,0.004
+136.6677753501389,0.0
+151.90498275365928,0.0
+167.14219015012534,0.0
+182.37939756587897,0.0
+197.6166049548289,0.0
+212.85381236586545,0.0
+228.0910197609567,0.0
+243.32822717056897,0.0
+258.565434567035,0.0
+273.8026419780716,0.0
+289.0398493656467,0.0
+304.2770567827751,0.0
+319.5142641792412,0.0
+334.7514715813868,0.0
+349.98867898394474,0.002
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">56.039694423886566,0.0
+56.039694423886566,0.308
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=15.237, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [14.77, 365.2]
+Mean estimate of displayed sample: 56.04 ± 2.102 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Distribution" xaxis="max: C" yaxis="probability">
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">14.770116136137139,0.0
+30.007323527366427,0.07
+45.2445309414422,0.33799999999999997
+60.48173833730673,0.646
+75.71894574310653,0.8460000000000001
+90.95615314185198,0.9440000000000001
+106.19336053791919,0.982
+121.43056794047712,0.994
+136.6677753501389,0.998
+151.90498275365928,0.998
+167.14219015012534,0.998
+182.37939756587897,0.998
+197.6166049548289,0.998
+212.85381236586545,0.998
+228.0910197609567,0.998
+243.32822717056897,0.998
+258.565434567035,0.998
+273.8026419780716,0.998
+289.0398493656467,0.998
+304.2770567827751,0.998
+319.5142641792412,0.998
+334.7514715813868,0.998
+349.98867898394474,0.998
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">56.039694423886566,0.0
+56.039694423886566,1.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=15.237, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [14.77, 365.2]
+Mean estimate of displayed sample: 56.04 ± 2.102 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Confidence Intervals" xaxis="max: C" yaxis="probability">
+					<series title="upper limit" type="k" color="0x0000dd" encoding="csv">14.770116136137139,0.0073506244708472545
+30.007323527366427,0.09601111371651075
+45.2445309414422,0.3813268826384906
+60.48173833730673,0.6879450933857747
+75.71894574310653,0.8765140532521083
+90.95615314185198,0.9624695816242433
+106.19336053791919,0.9917370544050624
+121.43056794047712,0.9987609559460302
+136.6677753501389,0.9999494047503481
+151.90498275365928,0.9999494047503481
+167.14219015012534,0.9999494047503481
+182.37939756587897,0.9999494047503481
+197.6166049548289,0.9999494047503481
+212.85381236586545,0.9999494047503481
+228.0910197609567,0.9999494047503481
+243.32822717056897,0.9999494047503481
+258.565434567035,0.9999494047503481
+273.8026419780716,0.9999494047503481
+289.0398493656467,0.9999494047503481
+304.2770567827751,0.9999494047503481
+319.5142641792412,0.9999494047503481
+334.7514715813868,0.9999494047503481
+349.98867898394474,0.9999494047503481
+
+					</series>
+					<series title="upper limit" type="k" color="0xdd0000" encoding="csv">14.770116136137139,0.0
+30.007323527366427,0.049238677249853376
+45.2445309414422,0.29660225790902994
+60.48173833730673,0.6023169420877407
+75.71894574310653,0.8113275604107503
+90.95615314185198,0.9200787206845095
+106.19336053791919,0.9661063381379191
+121.43056794047712,0.9825663526952516
+136.6677753501389,0.9889075325329869
+151.90498275365928,0.9889075325329869
+167.14219015012534,0.9889075325329869
+182.37939756587897,0.9889075325329869
+197.6166049548289,0.9889075325329869
+212.85381236586545,0.9889075325329869
+228.0910197609567,0.9889075325329869
+243.32822717056897,0.9889075325329869
+258.565434567035,0.9889075325329869
+273.8026419780716,0.9889075325329869
+289.0398493656467,0.9889075325329869
+304.2770567827751,0.9889075325329869
+319.5142641792412,0.9889075325329869
+334.7514715813868,0.9889075325329869
+349.98867898394474,0.9889075325329869
+
+					</series>
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">14.770116136137139,0.0
+30.007323527366427,0.07
+45.2445309414422,0.33799999999999997
+60.48173833730673,0.646
+75.71894574310653,0.8460000000000001
+90.95615314185198,0.9440000000000001
+106.19336053791919,0.982
+121.43056794047712,0.994
+136.6677753501389,0.998
+151.90498275365928,0.998
+167.14219015012534,0.998
+182.37939756587897,0.998
+197.6166049548289,0.998
+212.85381236586545,0.998
+228.0910197609567,0.998
+243.32822717056897,0.998
+258.565434567035,0.998
+273.8026419780716,0.998
+289.0398493656467,0.998
+304.2770567827751,0.998
+319.5142641792412,0.998
+334.7514715813868,0.998
+349.98867898394474,0.998
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">56.039694423886566,0.0
+56.039694423886566,1.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=15.237, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [14.77, 365.2]
+Mean estimate of displayed sample: 56.04 ± 2.102 (95% CI)</comment>
+				</plot>
+				<plot title="Frequency Histogram" xaxis="max: C" yaxis="count">
+					<series title="count" type="b(15.237207)" color="0x0000ff" encoding="csv">14.770116136137139,35.0
+30.007323527366427,134.0
+45.2445309414422,154.0
+60.48173833730673,100.0
+75.71894574310653,49.0
+90.95615314185198,19.0
+106.19336053791919,6.0
+121.43056794047712,2.0
+136.6677753501389,0.0
+151.90498275365928,0.0
+167.14219015012534,0.0
+182.37939756587897,0.0
+197.6166049548289,0.0
+212.85381236586545,0.0
+228.0910197609567,0.0
+243.32822717056897,0.0
+258.565434567035,0.0
+273.8026419780716,0.0
+289.0398493656467,0.0
+304.2770567827751,0.0
+319.5142641792412,0.0
+334.7514715813868,0.0
+349.98867898394474,1.0
+
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">56.039694423886566,0.0
+56.039694423886566,154.0
+
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=15.237, bucket count=23
+Runs: 500 in total, 500 (100%) displayed, 0 (0%) remaining
+Span of displayed sample: [14.77, 365.2]
+Mean estimate of displayed sample: 56.04 ± 2.102 (95% CI)</comment>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>simulate 1 [&lt;=HORIZON] {requested_phase}</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2021-07-28 10:00:28 +0200">
+				<option key="--search-order" value="0"/>
+				<option key="--statespace-consumption" value="1"/>
+				<option key="--diagnostic" value="-1"/>
+				<option key="--backwards-order" value="1"/>
+				<option key="--priority-order" value="0"/>
+				<option key="--generate-strategy" value="2"/>
+				<option key="--extrapolation" value="0"/>
+				<option key="--hashtable-size" value="27"/>
+				<option key="--filter" value="0"/>
+				<option key="--learning-method" value="4"/>
+				<option key="--good-runs" value="200"/>
+				<option key="--total-runs" value="500"/>
+				<option key="--runs-pr-state" value="100"/>
+				<option key="--eval-runs" value="100"/>
+				<option key="--max-iterations" value="30"/>
+				<option key="--max-imitation" value="5"/>
+				<option key="--reset-no-better" value="10"/>
+				<option key="--max-reset-learning" value="3"/>
+				<option key="--qlearning-alpha" value="2"/>
+				<option key="--split-upper-t" value="1.75"/>
+				<option key="--split-lower-t" value="0.15"/>
+				<option key="--split-ks" value="0.25"/>
+				<option key="--split-filter-rate" value="0.02"/>
+				<option key="--split-filter-val" value="0.99"/>
+				<option key="--discount" value="0.99"/>
+				<option key="--random-search-limit" value="0.5"/>
+				<option key="--deterministic-search-limit" value="0.5"/>
+				<option key="--indifference-scale" value="0.005"/>
+				<option key="--indifference-smoothing" value="10"/>
+				<option key="--lower-delta" value="0.01"/>
+				<option key="--upper-delta" value="0.01"/>
+				<option key="--alpha" value="0.05"/>
+				<option key="--beta" value="0.05"/>
+				<option key="--epsilon" value="0.05"/>
+				<option key="--u0" value="0.9"/>
+				<option key="--u1" value="1.1"/>
+				<option key="--histogram-bar-width" value="0.0"/>
+				<option key="--histogram-bar-count" value="0"/>
+				<option key="--resolution" value="4000"/>
+				<option key="--discretization" value="0.01"/>
+				<option key="--truncation-error" value="0.01"/>
+				<option key="--truncation-time-error" value="0.01"/>
+				
+				<plot title="Simulations (1)" xaxis="time" yaxis="value">
+					<series title="requested_phase" type="l" color="0xff0000" encoding="csv">0.0,0.0
+0.0,-1.0
+10.778875234896278,-1.0
+10.778875234896278,0.0
+32.0,0.0
+32.0,-1.0
+60.000002,-1.0
+
+					</series>
+					<comment/>
+				</plot>
+			</result>
+		</query>
+	</queries>
+</nta>
