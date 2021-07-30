@@ -44,3 +44,8 @@ def get_all_tripinfos(root: Element) -> dict:
             d = tripinfo_to_dict(child)
             result.append(d)
     return result
+
+def organize_by(data: dict, attribute: str) -> dict:
+    """
+    attribute: edge, lane, vType, 
+    """

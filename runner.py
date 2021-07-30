@@ -68,8 +68,8 @@ if __name__ == "__main__":
         "--route-files": ",".join(cfg.sumo.route),
         "--gui-settings-file": SUMO_GUI_CONFIG,
         "--device.emissions.probability": "1.0",
-        "--tripinfo-output": 
-            "/home/msa/Documents/SUMO/sumotlslab/examples/cross/output/trip2.xml"
+        "--full-output": 
+            "/home/msa/Documents/SUMO/sumotlslab/examples/cross/output/full.xml"
     }
 
     sumo_command = [sumo_bin]

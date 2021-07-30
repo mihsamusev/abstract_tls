@@ -104,3 +104,7 @@ class TestTripInfoStats(unittest.TestCase):
         ]
         self.assertEqual(len(result), self.n_vehs + self.n_cycs)
         self.assertEqual(result_ids, expected_ids)
+
+    def test_organize_by(self):
+        root = ET.parse(self.trips_emissions).getroot()
+        result = tis.get_all_tripinfos(root)
