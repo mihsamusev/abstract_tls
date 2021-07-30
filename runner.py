@@ -66,7 +66,10 @@ if __name__ == "__main__":
         "--net-file": cfg.sumo.network,
         "--additional-files": ",".join(cfg.sumo.additional),
         "--route-files": ",".join(cfg.sumo.route),
-        "--gui-settings-file": SUMO_GUI_CONFIG
+        "--gui-settings-file": SUMO_GUI_CONFIG,
+        "--device.emissions.probability": "1.0",
+        "--tripinfo-output": 
+            "/home/msa/Documents/SUMO/sumotlslab/examples/cross/output/trip2.xml"
     }
 
     sumo_command = [sumo_bin]

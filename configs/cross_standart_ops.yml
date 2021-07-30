@@ -10,7 +10,7 @@ logging:
 
 sumo:
   dir: "sumo"
-  gui: True
+  gui: False
   max_steps: 3000
   network: networks/cross6_LFR_exits.net.xml
   additional: [tll/cross_standart_wt.tll.xml]

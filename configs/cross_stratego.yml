@@ -14,7 +14,7 @@ sumo:
   max_steps: 3000
   network: networks/cross6_LFR_exits.net.xml
   additional: [tll/cross_standart_left_wt.tll.xml]
-  route: [demands/vehicles.rou.xml, demands/pedestrians.rou.xml, demands/cyclists.rou.xml]
+  route: [demands/vehicles.rou.xml, demands/cyclists.rou.xml]
 
 tls:
   - id: C
