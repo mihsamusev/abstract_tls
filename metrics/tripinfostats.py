@@ -1,6 +1,6 @@
 
 from xml.etree.ElementTree import Element
-
+import pandas as pd
 
 def personinfo_to_dict(child: Element) -> dict:
     """
@@ -45,7 +45,32 @@ def get_all_tripinfos(root: Element) -> dict:
             result.append(d)
     return result
 
-def organize_by(data: dict, attribute: str) -> dict:
+def pedinfo_to_pandas(root: Element) -> dict:
     """
     attribute: edge, lane, vType, 
     """
+    headers = ["type", "duration", "routeLength", "timeLoss"]
+    for trip in get_all_personinfos(root):
+        clean_trip = {}
+        for k, v in trip.items():
+            if k in headers:
+                clean_trip[k] = v
+        print(clean_trip)
+
+def tripinfo_to_pandas(root: Element) -> dict:
+    """
+    attribute: edge, lane, vType, 
+    """
+    headers = ["vType", "duration", "routeLength", "waitingTime", "waitingCount", "timeLoss"]
+    clean_trips = []
+    for trip in get_all_tripinfos(root):
+        clean_trip = {}
+        for k, v in trip.items():
+            if k in headers:
+                clean_trip[k] = v
+        clean_trips.append(clean_trip)
+    return pd.DataFrame(clean_trips)
+
+
+
+    

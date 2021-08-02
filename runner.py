@@ -1,4 +1,5 @@
 import sys
+import os
 import argparse
 
 import sumolib
@@ -68,8 +69,10 @@ if __name__ == "__main__":
         "--route-files": ",".join(cfg.sumo.route),
         "--gui-settings-file": SUMO_GUI_CONFIG,
         "--device.emissions.probability": "1.0",
-        "--full-output": 
-            "/home/msa/Documents/SUMO/sumotlslab/examples/cross/output/full.xml"
+        "--output-prefix": cfg.job.name + "_",
+        "--tripinfo-output": os.path.join(cfg.logging.dir, "trips.xml"),
+        "--vehroute-output": os.path.join(cfg.logging.dir, "vehroutes.xml"),
+        "--queue-output": os.path.join(cfg.logging.dir, "queues.xml")
     }
 
     sumo_command = [sumo_bin]

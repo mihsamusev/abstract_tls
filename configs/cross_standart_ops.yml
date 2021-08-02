@@ -10,10 +10,10 @@ logging:
 
 sumo:
   dir: "sumo"
-  gui: False
+  gui: True
   max_steps: 3000
   network: networks/cross6_LFR_exits.net.xml
-  additional: [tll/cross_standart_wt.tll.xml]
+  additional: [tll/cross_standart_wt.tll.xml, det/radars.det.xml]
   route: [demands/vehicles.rou.xml, demands/pedestrians.rou.xml, demands/cyclists.rou.xml]
 
 tls:
