@@ -105,6 +105,7 @@ class TestTripInfoStats(unittest.TestCase):
         self.assertEqual(len(result), self.n_vehs + self.n_cycs)
         self.assertEqual(result_ids, expected_ids)
 
-    def test_organize_by(self):
+    def test_get_queue_timeseries(self):
+        # incorrect input
         root = ET.parse(self.trips_emissions).getroot()
-        result = tis.get_all_tripinfos(root)
+        self.assertRaises(TypeError, tis.get_queue_timeseries, root)
