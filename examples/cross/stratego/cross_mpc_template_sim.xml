@@ -27,7 +27,7 @@ const encoded_signal_t encoded_phases[phase_id_t] = {
 1025            //7: 00000-00001-00000-00001
 };
 
-phase_id_t phase = 5;
+phase_id_t phase = 0;
 phase_id_t next_phase = 0;
 
 broadcast chan select_phase, phase_selected;
@@ -35,7 +35,7 @@ broadcast chan select_next[signal_t];
 
 // ARRAYS
 bool signal[signal_t];
-int waiting[signal_t] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
+int waiting[signal_t] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; 
 /*
 {
      0,  0,  0,  0,

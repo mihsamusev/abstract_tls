@@ -70,9 +70,6 @@ if __name__ == "__main__":
         "--gui-settings-file": SUMO_GUI_CONFIG,
         "--device.emissions.probability": "1.0",
         "--output-prefix": cfg.job.name + "_",
-        "--tripinfo-output": os.path.join(cfg.logging.dir, "trips.xml"),
-        "--vehroute-output": os.path.join(cfg.logging.dir, "vehroutes.xml"),
-        "--queue-output": os.path.join(cfg.logging.dir, "queues.xml")
     }
 
     sumo_command = [sumo_bin]
