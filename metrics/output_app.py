@@ -1,4 +1,6 @@
 import argparse
+import json
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -11,10 +13,28 @@ import pandas as pd
 
 import output_helper as oh
 
-color_palette = px.colors.qualitative.Plotly
-max_colors = len(color_palette)
+
+def total_agg(x: pd.DataFrame, metric: str, *args):
+    return x[metric][x[metric] > 0].sum()
+
+def max_agg(x: pd.DataFrame, metric: str, *args):
+    return x[metric].max()
+
+def weighted_mean_agg(x: pd.DataFrame, metric: str, weight_col: str):
+    result = np.nan
+    if x["count"].sum() != 0:
+        result = np.average(x[metric], weights=x[weight_col])
+    return result
+
 
 class DataModel():
+    NON_METRICS = ["run_name", "begin", "end", "lane", "lane_group", "count"]
+    aggregation_strategy = {
+        "max": max_agg,
+        "total": total_agg,
+        "mean": weighted_mean_agg
+    }
+
     def __init__(self, data: pd.DataFrame):
         self.data = data
 
@@ -24,10 +44,21 @@ class DataModel():
             (self.data["lane_group"] == lane_group)
             ]
         
+        # extract column name prefix
+        metric_prefix = metric.split("_")[0]
+        agg_fun = DataModel.aggregation_strategy[metric_prefix]
+
+        # apply time wise aggregation depending on the prefix
+        df_agg = df[["begin","count", metric]].groupby("begin").apply(
+            agg_fun, *(metric, "count"))
+
+        # for debug
+        # print(df[["begin", "count", metric]], df_agg)
+
         t, x = np.array([[0, 0]]).T
-        if not df.empty:
-            t, x = df[["begin", metric]].to_numpy().T
-            print(df)
+        if not df_agg.empty:
+            t = df_agg.index.to_numpy()
+            x = df_agg.to_numpy()
         return t, x
 
     def get_data(self, run, metric, lane_group):
@@ -46,7 +77,7 @@ class DataModel():
         """
         Return list of metrics found in the runs
         """
-        non_metric = ["run_name", "begin", "end", "lane", "lane_group"]
+        non_metric = DataModel.NON_METRICS
         return [c for c in self.data.columns if c not in non_metric]
 
     def get_lane_groups(self):
@@ -56,6 +87,8 @@ class DataModel():
         return self.data["lane_group"].unique()
 
 class DashView():
+    COLOR_PALETTE = px.colors.qualitative.Plotly
+    MAX_COLORS = len(COLOR_PALETTE)
     def __init__(self, datamodel):
         self.app = dash.Dash(__name__)
         self.datamodel = datamodel
@@ -108,17 +141,20 @@ class DashView():
             dd.Input('input_groups', 'value')],
         )(self.update_subplot)
 
-    def update_xlabels(self, figure, row_names, column_names):
+    def update_labels(self, figure, row_names, column_names):
         """
-        Updates x labels depending on the row metrics    
+        Updates labels depending on the row metrics    
         """
         p = 0
         for metric in row_names:
             for _ in column_names:
-                axis_name = "xaxis" if p==0 else f"xaxis{p + 1}"
+                xaxis_name = "xaxis" if p==0 else f"xaxis{p + 1}"
+                yaxis_name = "yaxis" if p==0 else f"yaxis{p + 1}"
                 p += 1
                 figure.update_layout(
-                    {axis_name: {"title": "{} {}".format(metric, "*units")}})
+                    {yaxis_name: {"title": "{} {}".format(metric, "[units]")}})
+                figure.update_layout(
+                    {xaxis_name: {"title": "time [s]"}})
     
 
     def update_subplot(self, runs, metrics, groups):
@@ -141,7 +177,7 @@ class DashView():
         
         # generate plots
         for k, run in enumerate(runs):
-            color = color_palette[k % max_colors]
+            color = DashView.COLOR_PALETTE[k % DashView.MAX_COLORS]
             for i, metric in enumerate(metrics):
                 for j, group in enumerate(groups):    
                     
@@ -151,26 +187,13 @@ class DashView():
                     fig.append_trace(go.Scatter(**{
                         "x": t,
                         "y": x,
-                        "mode": "lines",
                         "name": run,
-                        "marker": {"color": color},
+                        "marker": {"color": color, "size": 12},
                         "showlegend": i == 0 and j == 0,
                         }), i + 1, j + 1)
-
-                    """
-                    fig.append_trace(go.Histogram(**{
-                        "x": x,
-                        "histnorm": 'probability',
-                        "opacity": 0.75,
-                        "nbinsx": 20,
-                        "name": run,
-                        "marker": {"color": color},
-                        "showlegend": i == 0 and j == 0,
-                        }), i + 1, j + 1)
-                    """
 
         # update labels and legend
-        self.update_xlabels(
+        self.update_labels(
             fig, row_names=metrics, column_names=groups)
         fig.update_layout(
             barmode="overlay",
@@ -179,13 +202,28 @@ class DashView():
 
 
 def main(args):
-    df = oh.output_folder_to_pandas(args.folder)
-    group_map = {
-        "EW_cars": ["EC_2", "EC_3", "EC_4", "WC_2", "WC_3", "WC_4"],
-        "NS_cars": ["NC_2", "NC_3", "NC_4", "SC_2", "SC_3", "SC_4"],
-        "EW_cyclist": ["EC_1", "WC_1"],
-        "NS_cyclist": ["NC_1", "SC_1"]
+    DET_METRICS = {
+        "meanTimeLoss": "mean_time_loss",
+        "meanSpeed": "mean_speed",
+        "maxVehicleNumber": "count",
+        "maxHaltingDuration": "max_waiting_time",
+        "maxJamLengthInVehicles": "max_queue_veh",
+    } # where does it go to satisfy open/closed principle
+
+    EMIT_METRICS = {
+        "CO2_abs": "total_co2",
+        "fuel_abs": "total_fuel"
     }
+    df = oh.output_folder_to_pandas(
+        args.folder, 
+        DET_METRICS,
+        EMIT_METRICS)
+
+
+    group_map = {}
+    if args.groups:
+        with open(args.groups, "r") as fin:
+            group_map = json.load(fin)
     df = oh.add_lane_group_column(df, group_map)
 
     dm = DataModel(df)
@@ -196,5 +234,7 @@ if __name__ == '__main__':
     ag = argparse.ArgumentParser()
     ag.add_argument("-f", "--folder", type=str, required=True, help=
         "Path to the folder with detector and lane emissions output")
+    ag.add_argument("-g", "--groups", type=str, default=None, help=
+        "path to JSON for grouping lanes by leg and creating lane_groups column in Pandas")
     args = ag.parse_args()
     main(args)

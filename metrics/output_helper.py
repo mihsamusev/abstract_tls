@@ -4,6 +4,15 @@ import argparse
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
 import pandas as pd
+import json
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Metric:
+    sumo_name: str
+    display_name: str
+    units: str
+    agg_method: str
 
 def personinfo_to_dict(child: Element) -> dict:
     """
@@ -36,7 +45,6 @@ def get_all_personinfos(root: Element) -> dict:
             result.append(d)
     return result
 
-
 def get_all_tripinfos(root: Element) -> dict:
     """
     Converts tripinfo xml ElementTree list of trip info dicts
@@ -58,7 +66,6 @@ def pedinfo_to_pandas(root: Element) -> dict:
         for k, v in trip.items():
             if k in headers:
                 clean_trip[k] = v
-        print(clean_trip)
 
 def tripinfo_to_pandas(root: Element) -> dict:
     """
@@ -104,7 +111,7 @@ def get_queue_timeseries(root: Element) -> dict:
                 result[lane_id][key].append(lane.attrib[key])
     return result
 
-def get_detector_intervals(root: Element, prefix="e2det_") -> list:
+def get_detector_intervals(root: Element, metrics:dict, prefix: str="e2det_") -> list:
     """
     Parses SUMO detector output file into a dictionary
     https://sumo.dlr.de/docs/Simulation/Output/Lanearea_Detectors_%28E2%29.html
@@ -112,16 +119,6 @@ def get_detector_intervals(root: Element, prefix="e2det_") -> list:
     if root.tag != "detector":
         raise TypeError(
             F"Wrong input tag, {root.tag} was given but, <detector> expected.")
-
-    METRICS = {
-        "meanTimeLoss":"mean_time_loss",
-        "meanSpeed": "mean_speed",
-        "maxVehicleNumber": "count",
-        "maxHaltingDuration": "max_waiting_time",
-        "meanHaltingDuration": "mean_waiting_time",
-        "maxJamLengthInVehicles": "max_queue_veh",
-        "maxJamLengthInMeters": "max_queue_meters"
-    } # where does it go to satisfy open/closed principle
 
     result = []
     for interval in root:
@@ -133,12 +130,12 @@ def get_detector_intervals(root: Element, prefix="e2det_") -> list:
             "end": float(end),
             "lane": lane_id
         }
-        metrics = {METRICS[k]: float(v) for k, v in interval.attrib.items() if k in METRICS}
-        entry.update(metrics)
+        selected_metrics = {metrics[k]: float(v) for k, v in interval.attrib.items() if k in metrics}
+        entry.update(selected_metrics)
         result.append(entry)
     return result
 
-def get_emission_intervals(root: Element) -> list:
+def get_emission_intervals(root: Element, metrics: dict) -> list:
     """
     Parses SUMO lane based emission output file into a dictionary
     https://sumo.dlr.de/docs/Simulation/Output/Lane-_or_Edge-based_Emissions_Measures.html
@@ -147,14 +144,6 @@ def get_emission_intervals(root: Element) -> list:
     if root.tag != "meandata":
         raise TypeError(
             F"Wrong input tag, {root.tag} was given but, <meandata> expected.")
-
-    METRICS = {
-        "traveltime": "travel_time",
-        "fuel_perVeh": "fuel_per_veh",
-        "CO2_perVeh": "co2_per_veh",
-        "CO2_abs": "co2_abs",
-        "CO2_normed": "co2_per_kmh",
-    }
 
     result = []
     for interval in root:
@@ -167,9 +156,9 @@ def get_emission_intervals(root: Element) -> list:
                     "end": float(end),
                     "lane": lane.attrib["id"]
                 }
-                metrics = {METRICS[k]: float(v) for k, v in lane.attrib.items() if k in METRICS}
-                missing_metrics = {m: 0.00 for m in METRICS.values() if m not in metrics}
-                entry.update(metrics)
+                selected_metrics = {metrics[k]: float(v) for k, v in lane.attrib.items() if k in metrics}
+                missing_metrics = {m: 0.00 for m in metrics.values() if m not in selected_metrics}
+                entry.update(selected_metrics)
                 entry.update(missing_metrics)
                 result.append(entry)
 
@@ -202,14 +191,14 @@ def search_folder(path: str, extensions: dict, prefix_sep="_") -> dict:
     return runs
 
 
-def read_detectors_to_pandas(file: str) -> pd.DataFrame:
+def read_detectors_to_pandas(file: str, det_metrics: dict) -> pd.DataFrame:
     root = ET.parse(file).getroot()
-    dct = get_detector_intervals(root)
+    dct = get_detector_intervals(root, det_metrics)
     return pd.DataFrame(dct)
 
-def read_emissions_to_pandas(file: str) -> pd.DataFrame:
+def read_emissions_to_pandas(file: str, emit_metrics: dict) -> pd.DataFrame:
     root = ET.parse(file).getroot()
-    dct = get_emission_intervals(root)
+    dct = get_emission_intervals(root, emit_metrics)
     return pd.DataFrame(dct)
 
 def merge_detectors_and_emissions(det: pd.DataFrame, emit: pd.DataFrame) -> pd.DataFrame:
@@ -222,11 +211,14 @@ def add_lane_group_column(df: pd.DataFrame, group_map: dict) -> pd.DataFrame:
     """
     Adds a stream column based on the dictionary
     """
-    df.insert(0, "lane_group", df["lane"].apply(
-        assign_stream, args=[group_map]))
+    if not group_map:
+        df.insert(0, "lane_group", df["lane"])
+    else:
+        df.insert(0, "lane_group", df["lane"].apply(
+            assign_stream, args=[group_map]))
     return df
 
-def output_folder_to_pandas(output_dir: str) -> pd.DataFrame:
+def output_folder_to_pandas(output_dir: str, det_metrics: dict, emit_metrics: dict) -> pd.DataFrame:
     """
     Combine all contents of the output folder to a single DataFrame.
     """
@@ -237,27 +229,62 @@ def output_folder_to_pandas(output_dir: str) -> pd.DataFrame:
 
     dfs = []
     for run_name, run_files in runs.items():
-        df_det = read_detectors_to_pandas(run_files["det"])
-        df_emit = read_emissions_to_pandas(run_files["emit"])
+        df_det = read_detectors_to_pandas(run_files["det"], det_metrics)
+        df_emit = read_emissions_to_pandas(run_files["emit"], emit_metrics)
         df = merge_detectors_and_emissions(df_det, df_emit)
         df.insert(0, "run_name", run_name)
         dfs.append(df)
     
     return pd.concat(dfs, axis=0)
     
+"""
+metrics = [
+    Metric(sumo_name, display_name, units, aggregation_method),
+    Metric(sumo_name, display_name, units, aggregation_method),
+]
+"""
 
 if __name__ == "__main__":
     ag = argparse.ArgumentParser()
     ag.add_argument("-f", "--folder", type=str, required=True, help=
         "Path to the folder with detector and lane emissions output")
+    ag.add_argument("-g", "--groups", type=str, default=None, help=
+        "path to JSON for grouping lanes by leg and creating lane_groups column in Pandas")
     args = ag.parse_args()
 
-    df = output_folder_to_pandas(args.folder)
-    group_map = {
-        "EW_cars": ["EC_2", "EC_3", "EC_4", "WC_2", "WC_3", "WC_4"],
-        "NS_cars": ["NC_2", "NC_3", "NC_4", "SC_2", "SC_3", "SC_4"],
-        "EW_cyclist": ["EC_1", "WC_1"],
-        "NS_cyclist": ["NC_1", "SC_1"]
+    DET_METRICS = {
+        "meanTimeLoss": "mean_time_loss",
+        "meanSpeed": "mean_speed",
+        "meanHaltingDuration": "mean_waiting_time",
+        "maxVehicleNumber": "count",
+        "maxHaltingDuration": "max_waiting_time",
+        "maxJamLengthInVehicles": "max_queue_veh",
+        "maxJamLengthInMeters": "max_queue_meters"
+    } # where does it go to satisfy open/closed principle
+
+    METRICS = [
+        Metric("meanTimeLoss", "mean_time_loss", "[s]", "mean"),
+        Metric("meanSpeed", "mean_speed", "[m/s]", "mean"),
+        Metric("meanHaltingDuration", "mean_waiting_time", "[s]", "mean"),
+        Metric("maxVehicleNumber", "count", "[]", "total"),
+        Metric("maxHaltingDuration", "max_waiting_time", "[s]", "max"),
+        Metric("maxJamLengthInVehicles", "max_queue_veh", "[]", "max"),
+        Metric("maxJamLengthInMeters", "max_queue_meters", "[m]", "max")
+    ]
+
+    EMIT_METRICS = {
+        "CO2_abs": "total_co2",
+        "fuel_abs": "total_fuel"
     }
+    df = output_folder_to_pandas(
+        args.folder, 
+        DET_METRICS,
+        EMIT_METRICS)
+
+    group_map = {}
+    if args.groups:
+        with open(args.groups, "r") as fin:
+            group_map = json.load(fin)
+    
     df = add_lane_group_column(df, group_map)
     print(df.head())

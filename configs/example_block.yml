@@ -10,7 +10,7 @@ logging:
 
 sumo:
   dir: "sumo"
-  gui: False
+  gui: True
   max_steps: 3000
   network: block.net.xml
   additional: []

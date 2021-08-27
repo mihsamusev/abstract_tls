@@ -27,9 +27,27 @@ Coming soon
 3. [Examples](docs/examples.md)
 
 ## Agent Zoo
-Coming soon
+List of standart agents to benchmark against:
+
+- SCOOT - not implemented 
+- SCATS - not implemented
+- SOTL - not implemented
+- MAX_PRESSURE - not implemented
+- SURTRAC - not implemented
 
 ## Limitations / Details
 - Single node intersections, no clusters
 - No communications between TLS
 - Will use last loaded traffic lights program, either initial or by `*.tll.xml`
+
+## TODOS
+### Visualization
+- add time-distance curve style output with ability to zoom in to time portions
+
+### Runner
+- simulate a controller in shadow mode
+- simulate a controller and switch to a new controller
+
+### Github
+Create dockerized env
+Setup tests in dockerized env

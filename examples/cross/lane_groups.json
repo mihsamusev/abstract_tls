@@ -1,0 +1,6 @@
+{
+  "EW_cars": ["EC_2", "EC_3", "EC_4", "WC_2", "WC_3", "WC_4"],
+  "NS_cars": ["NC_2", "NC_3", "NC_4", "SC_2", "SC_3", "SC_4"],
+  "EW_cyclist": ["EC_1", "WC_1"],
+  "NS_cyclist": ["NC_1", "SC_1"]
+}
